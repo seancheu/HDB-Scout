@@ -8,8 +8,56 @@ lease left, MRT walk, primary-school odds, estimated COV, affordability against
 *your* budget, and a map of everything that matters. All running on **your own
 computer**; your shortlist, notes, and finances never leave your machine.
 
+![HDB Scout — listings, town map and Top Picks](docs/01-overview.png)
+
 > ⚠️ Community project, not affiliated with PropertyGuru, SRX, HDB, MOE, or any
 > government agency. For personal, non-commercial research use.
+
+---
+
+## See it work
+
+### One paste → your whole search, ranked
+Import an entire filtered PropertyGuru search. Every listing arrives with
+photos; town tabs and a colour-coded map show your search geography at a
+glance.
+
+### ✨ Top picks, with reasons
+Tell it what you want and it names the best few — in plain English, not scores
+you have to decode.
+
+![Top picks with plain-English reasons](docs/02-top-picks.png)
+
+### 💵 Is it overpriced? 🎓 Will my kid get in?
+The two questions that actually decide a purchase, answered per listing from
+official data: **potential COV** against recent transacted comps (size-matched,
+floor-matched, trend-adjusted) with a street price trend, and the **P1
+registration outlook** for nearby schools combined with *this flat's* distance
+— plus what it costs you monthly and upfront against your own budget.
+
+![Potential COV, P1 registration check and affordability](docs/03-cov-and-p1.png)
+
+### 🗺️ Everything that matters, mapped
+Per listing: MRT/LRT, primary schools, malls, hawker centres, preschools and
+CHAS clinics — with walking distances. Click any pin to jump to the listing.
+
+![Per-listing map with amenities and legend](docs/04-listing-map.png)
+
+### 🔎 Tell it what you want — once
+Plain-language criteria, your budget, your commute, and saved searches you can
+refresh anytime (duplicates removed automatically).
+
+![Set-up panel: preferences, budget, commute, saved searches](docs/05-setup.png)
+
+### 📱 On your phone, and after dark
+Run it on your Mac, browse it from your phone on the sofa.
+
+<p align="center">
+  <img src="docs/07-mobile.png" alt="Mobile view" width="46%">
+  <img src="docs/06-dark.png" alt="Dark mode" width="52%">
+</p>
+
+---
 
 ## Who it's for
 
