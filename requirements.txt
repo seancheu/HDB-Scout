@@ -1,0 +1,5 @@
+flask>=3.0
+playwright>=1.44
+beautifulsoup4>=4.12
+folium>=0.16
+requests>=2.31

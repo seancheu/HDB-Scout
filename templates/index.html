@@ -1,0 +1,1235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HDB Scout</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🏠 HDB Scout</div>
+    <form id="form" class="searchbar">
+      <textarea id="url" rows="1" placeholder="Paste a listing URL, or a PropertyGuru search-results URL to import many at once…" autocomplete="off"></textarea>
+      <button id="go" type="submit">Extract</button>
+    </form>
+    <button id="theme" class="icon-btn" type="button" title="Toggle theme">🌙</button>
+  </header>
+
+  <main class="display">
+    <div id="status" class="status hint" data-intro="1">
+      Paste a PropertyGuru or SRX link (or a few) above and hit <b>Extract</b>.
+      A Chrome window opens briefly to load each page.
+      <button id="example" class="linkbtn" type="button">Try an example ↗</button>
+    </div>
+
+    <div class="toolbar" id="toolbar">
+      <span id="count" class="count" title="Saved listings">🏠 0</span>
+      <input id="filter" class="filter" type="search" placeholder="Filter by block or MRT…">
+      <select id="sort" class="sort">
+        <option value="newest">Newest first</option>
+        <option value="score_desc">Best match first</option>
+        <option value="price_asc">Price: low → high</option>
+        <option value="price_desc">Price: high → low</option>
+        <option value="psf_asc">$/sqft: best value first</option>
+        <option value="size_desc">Size: large → small</option>
+        <option value="size_asc">Size: small → large</option>
+        <option value="lease_desc">Lease: longest first</option>
+        <option value="lease_asc">Lease: shortest first</option>
+        <option value="mrt_asc">MRT: nearest first</option>
+      </select>
+      <button id="setup-toggle" class="ghost" type="button">⚙️ Set up</button>
+      <span class="spacer"></span>
+      <button id="deepen-all" class="ghost accent hidden" type="button">⬇ Load details</button>
+      <button id="compare" class="ghost" type="button" disabled>Compare (0)</button>
+      <div class="menu-wrap">
+        <button id="more-btn" class="ghost" type="button" title="More">⋯</button>
+        <div id="more-menu" class="menu hidden">
+          <button id="recheck-starred" type="button">🔄 Re-check ★ prices</button>
+          <a id="download" href="/download" download>⬇ Download CSV</a>
+          <button id="delete-all" type="button" class="danger">🗑 Clear all</button>
+        </div>
+      </div>
+    </div>
+
+    <section id="setup-panel" class="score-panel hidden">
+      <div class="setup-grid">
+        <div class="setup-sec">
+          <p class="setup-h">🔎 What you want <button id="score-clear" class="linkbtn" type="button">reset</button></p>
+          <p class="setup-sub">Ranks by fit; ✓ must hides the rest. Blank = ignore.</p>
+          <div class="prefs" id="prefs"></div>
+        </div>
+        <div class="setup-sec">
+          <p class="setup-h">💰 Your budget <button id="fin-clear" class="linkbtn" type="button">reset</button></p>
+          <p class="setup-sub">Shows if each unit's upfront &amp; monthly fit.</p>
+          <div class="prefs">
+            <label class="pref"><span>💵 Cash on hand (S$)</span><input type="number" id="fin-cash" placeholder="e.g. 60000"></label>
+            <label class="pref"><span>🏦 CPF OA available (S$)</span><input type="number" id="fin-cpf" placeholder="e.g. 150000"></label>
+            <label class="pref"><span>📅 Monthly budget (S$)</span><input type="number" id="fin-monthly" placeholder="e.g. 2500"></label>
+          </div>
+        </div>
+        <div class="setup-sec">
+          <p class="setup-h">🕒 Commute to work</p>
+          <p class="setup-sub">Each unit shows transit &amp; drive time.</p>
+          <div class="commute-box">
+            <input id="commute-dest" type="text" placeholder="Workplace address">
+            <button id="commute-go" class="ghost" type="button">Go</button>
+            <span id="commute-msg" class="muted"></span>
+          </div>
+        </div>
+        <div class="setup-sec setup-wide">
+          <p class="setup-h">🔖 Saved searches</p>
+          <p class="setup-sub">Save a PropertyGuru filter link, then <b>Refresh</b> to pull new listings — duplicates are removed automatically.</p>
+          <div id="searches-list" class="searches"></div>
+          <div class="commute-box">
+            <input id="search-url" type="text" placeholder="Paste a PropertyGuru search URL">
+            <button id="search-save" class="ghost accent" type="button">Save &amp; pull</button>
+          </div>
+          <p id="search-msg" class="muted"></p>
+        </div>
+      </div>
+    </section>
+
+    <div id="tabs" class="tabs hidden"></div>
+
+    <div id="ovwrap" class="ovwrap hidden">
+      <button id="ov-toggle" class="tab" type="button"></button>
+      <iframe id="ov-map" class="ov-map hidden" title="Area overview map" loading="lazy"></iframe>
+    </div>
+
+    <p id="filter-note" class="filter-note hidden"></p>
+
+    <section id="toppicks" class="toppicks hidden">
+      <h3>✨ Top picks for you</h3>
+      <div id="toppicks-cards" class="tp-cards"></div>
+    </section>
+
+    <div id="list-head" class="list-head">
+      <span></span>
+      <span>Unit</span>
+      <span title="Asking price · est. monthly mortgage below">Price</span>
+      <span title="Floor area · price per square foot below">Size</span>
+      <span title="Walking distance to the nearest station">Distance to MRT</span>
+      <span title="Year the block was completed (Temporary Occupation Permit)">TOP</span>
+      <span title="Years remaining on the 99-year HDB lease">Lease left</span>
+      <span title="How long the listing has been on the market">Listed</span>
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div id="list" class="list"></div>
+    <p id="empty" class="empty">No saved properties yet.</p>
+
+    <section id="comparewrap" class="comparewrap hidden">
+      <div class="compare-head">
+        <h3>⚖️ Compare</h3>
+        <button id="compare-close" class="icon-btn" type="button" title="Close">✕</button>
+      </div>
+      <div id="compare-summary" class="chips"></div>
+      <iframe id="compare-map" title="Comparison map" loading="lazy"></iframe>
+    </section>
+  </main>
+
+  <script>
+    // ---- theme ---------------------------------------------------------------
+    const root = document.documentElement;
+    function applyTheme(t) {
+      root.setAttribute('data-theme', t);
+      document.getElementById('theme').textContent = t === 'dark' ? '☀️' : '🌙';
+      localStorage.setItem('theme', t);
+      // Re-theme any open maps.
+      document.querySelectorAll('iframe[data-src]').forEach(f => {
+        if (f.src) f.src = f.dataset.src + (f.dataset.src.includes('?') ? '&' : '?') + 'theme=' + t;
+      });
+    }
+    function theme() { return root.getAttribute('data-theme') || 'light'; }
+    applyTheme(localStorage.getItem('theme') || 'light');
+    document.getElementById('theme').addEventListener('click', () =>
+      applyTheme(theme() === 'dark' ? 'light' : 'dark'));
+
+    // ---- helpers -------------------------------------------------------------
+    const statusEl = document.getElementById('status');
+    const listEl = document.getElementById('list');
+    const emptyEl = document.getElementById('empty');
+    const go = document.getElementById('go');
+    let ROWS = [];
+    const selected = new Set();
+
+    const esc = s => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const debounce = (fn, ms = 200) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+    const renderListSoon = debounce(() => renderList(), 200);
+    const numOf = s => { const m = (s || '').replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; };
+    const priceNum = r => numOf(r.price);
+    const sizeNum = r => numOf(r.size_sqft);
+    // $/sqft: from the listing's psf text, else derived from price ÷ size.
+    const psfNum = r => {
+      const v = numOf(r.psf);
+      if (v) return v;
+      const p = priceNum(r), s = sizeNum(r);
+      return (p && s) ? Math.round(p / s) : null;
+    };
+    const mrtNum = r => numOf(r.mrt_distance);           // leading metres
+    const mrtLine = r => [r.mrt_distance, r.nearest_mrt].filter(Boolean).join(' — ') || '—';
+    // Lease remaining on a 99-year HDB lease: 99 − (current year − TOP year).
+    const leaseNum = r => {
+      const top = parseInt(r.top_year, 10);
+      if (!top) return null;
+      return Math.min(99, 99 - (new Date().getFullYear() - top));
+    };
+    const leaseText = r => { const l = leaseNum(r); return l == null ? '—' : l + ' yrs'; };
+    // How long a listing has been up, from its listed date ("2026-07-15" or "08-Apr-2026").
+    const listedDays = r => {
+      const s = r.listed_date;
+      if (!s) return null;
+      let d = new Date(s);
+      if (isNaN(d)) { const m = s.match(/(\d{1,2})-([A-Za-z]{3})-(\d{4})/); if (m) d = new Date(`${m[2]} ${m[1]} ${m[3]}`); }
+      if (isNaN(d)) return null;
+      return Math.max(0, Math.floor((Date.now() - d) / 86400000));
+    };
+    const listedText = r => {
+      const d = listedDays(r);
+      if (d == null) return '—';
+      if (d === 0) return 'today';
+      if (d < 30) return d + 'd ago';
+      if (d < 365) return Math.round(d / 30) + 'mo ago';
+      return (d / 365).toFixed(1) + 'y ago';
+    };
+
+    // ---- affordability (bank loan: 75% LTV, 25 yrs @ 2.6% p.a.) ---------------
+    const LTV = 0.75, TENURE_YRS = 25, RATE = 0.026;
+    function bsd(price) {           // Buyer's Stamp Duty, current SG tiers
+      const tiers = [[180000, .01], [180000, .02], [640000, .03], [500000, .04], [1500000, .05], [Infinity, .06]];
+      let left = price, duty = 0;
+      for (const [band, rate] of tiers) {
+        const amt = Math.min(left, band);
+        duty += amt * rate; left -= amt;
+        if (left <= 0) break;
+      }
+      return Math.round(duty);
+    }
+    function affordability(r) {
+      const p = priceNum(r);
+      if (!p) return null;
+      const loan = p * LTV, rm = RATE / 12, n = TENURE_YRS * 12;
+      const monthly = Math.round(loan * rm / (1 - Math.pow(1 + rm, -n)));
+      const down = Math.round(p * (1 - LTV));
+      const duty = bsd(p);
+      return {monthly, down, duty, upfront: down + duty};
+    }
+    const money = n => 'S$' + n.toLocaleString();
+    const moneyK = n => 'S$' + Math.round(n / 1000) + 'k';
+
+    // ---- your financials -----------------------------------------------------
+    let FIN = JSON.parse(localStorage.getItem('fin') || '{}');
+    const finActive = () => ['cash', 'cpf', 'monthly'].some(k => Number(FIN[k]) > 0);
+    function afford(r) {
+      const a = affordability(r);
+      if (!a) return null;
+      const have = (Number(FIN.cash) || 0) + (Number(FIN.cpf) || 0);
+      a.have = have;
+      a.upfrontGap = have ? a.upfront - have : null;   // +short, -spare
+      a.upfrontOk = have ? a.upfront <= have : null;
+      const budget = Number(FIN.monthly) || 0;
+      a.monthlyGap = budget ? a.monthly - budget : null;
+      a.monthlyOk = budget ? a.monthly <= budget : null;
+      return a;
+    }
+    function affordChip(r) {
+      if (!finActive()) return null;
+      const a = afford(r);
+      if (!a) return null;
+      if (a.upfrontOk === false) return {label: `⚠ short ${moneyK(a.upfrontGap)} upfront`, tone: 'warn'};
+      if (a.monthlyOk === false) return {label: `⚠ ${money(a.monthlyGap)}/mo over budget`, tone: 'warn'};
+      if (a.upfrontOk || a.monthlyOk) return {label: '✓ affordable', tone: 'good'};
+      return null;
+    }
+    ['cash', 'cpf', 'monthly'].forEach(k => {
+      const inp = document.getElementById('fin-' + k);
+      inp.value = FIN[k] ?? '';
+      inp.addEventListener('input', () => { FIN[k] = inp.value; localStorage.setItem('fin', JSON.stringify(FIN)); renderListSoon(); });
+    });
+    // ---- official block profile ------------------------------------------------
+    const BLOCK_CACHE = {};
+    async function ensureBlock(item, r) {
+      const box = item.querySelector('.keydet');
+      if (!box || box.dataset.blk || !r._deep) return;
+      box.dataset.blk = '1';
+      try {
+        const res = await fetch('/block/' + r._id);
+        if (!res.ok) return;
+        const d = BLOCK_CACHE[r._id] = await res.json();
+        const bits = [
+          d.year_completed && `built ${d.year_completed}`,
+          d.max_floor && `${d.max_floor} floors`,
+          d.total_units && `${d.total_units} units`,
+          `MSCP ${d.mscp ? '✓' : '✗'}`,
+          d.market_hawker ? 'market/hawker in block ✓' : null,
+        ].filter(Boolean).join(' · ');
+        box.insertAdjacentHTML('beforeend',
+          `<div class="kd-group"><b>Block (official HDB record)</b><ul><li>${esc(bits)}</li></ul></div>`);
+      } catch {}
+    }
+
+    // Street price trend: inline sparkline from the monthly medians the COV
+    // check already fetched, plus the fitted drift as a plain-English line.
+    function trendLine(d) {
+      const s = d.series || [];
+      if (s.length < 4) return '';
+      const vals = s.map(p => p[1]);
+      const min = Math.min(...vals), max = Math.max(...vals);
+      const W = 160, H = 34, pad = 2;
+      const x = i => pad + i * (W - 2 * pad) / (s.length - 1);
+      const y = v => max === min ? H / 2 : pad + (H - 2 * pad) * (1 - (v - min) / (max - min));
+      const pathD = vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+      const yoy = d.drift_pct_mo != null ? (d.drift_pct_mo * 12).toFixed(1) : null;
+      const dirTxt = yoy == null ? '' :
+        (Math.abs(yoy) < 1 ? 'flat over the past year' : `${yoy > 0 ? '↑ up' : '↓ down'} ~${Math.abs(yoy)}%/yr`);
+      return `<div class="trend">
+        <svg viewBox="0 0 ${W} ${H}" class="spark" preserveAspectRatio="none"><path d="${pathD}"/></svg>
+        <span class="cov-line">Street trend (similar size): <b>${esc(dirTxt)}</b> · ${s.length} months of data</span>
+      </div>`;
+    }
+
+    // ---- potential COV (vs recent transactions) --------------------------------
+    const COV_CACHE = {};
+    async function ensureCov(item, r) {
+      const box = item.querySelector('.covbox');
+      if (!box || box.dataset.done) return;
+      box.dataset.done = '1';
+      const line = box.querySelector('.cov-line');
+      try {
+        const d = COV_CACHE[r._id] || await (await fetch('/cov/' + r._id)).json();
+        COV_CACHE[r._id] = d;
+        if (d.error) { line.textContent = d.error; return; }
+        if (!d.median) {
+          line.textContent = `Not enough recent transactions on ${d.street || 'this street'} to estimate (${d.count} found).`;
+          return;
+        }
+        const scopeTxt = d.scope === 'block' ? 'in this block' : 'on this street';
+        const rk = n => money(Math.round(n / 1000) * 1000);   // avoid false precision
+        let verdict;
+        if (d.cov == null) verdict = '';
+        else if (d.cov > 5000) verdict = `<p class="cov-verdict warn-t">≈ <b>${rk(d.cov)} cash over</b> the adjusted market value — likely COV territory.</p>`;
+        else if (d.cov < -5000) verdict = `<p class="cov-verdict good-t">Asking is <b>${rk(-d.cov)} below</b> the adjusted market value — low COV risk.</p>`;
+        else verdict = '<p class="cov-verdict good-t">Asking is in line with the adjusted market value — COV likely minimal.</p>';
+        box.innerHTML = `<span class="label">💵 Potential COV (est.)</span>
+          ${verdict}
+          <p class="cov-line">Based on <b>${d.count}</b> similar transactions ${scopeTxt} (last ${d.months} mo): adjusted median <b>${money(d.median)}</b> · range ${money(d.low)}–${money(d.high)}</p>
+          ${(d.adjustments || []).length ? `<p class="cov-line muted">Refinements: ${d.adjustments.map(esc).join(' · ')}</p>` : ''}
+          ${trendLine(d)}
+          <ul class="cov-comps">${d.latest.map(c => `<li>${esc(c.month)} · Blk ${esc(c.block)} · storey ${esc(c.storey)} · ${Math.round(c.sqm * 10.7639).toLocaleString()} sqft · <b>${money(c.price)}</b></li>`).join('')}</ul>
+          <p class="cov-note muted">From official HDB resale data. Actual valuation is set by HDB after OTP — COV is payable in cash only.</p>`;
+      } catch (err) { line.textContent = 'Could not load transaction data: ' + err; }
+    }
+
+    // ---- P1 registration check (MOE vacancies / balloting) -------------------
+    const P1_CACHE = {};
+    async function ensureP1(item, r) {
+      const box = item.querySelector('.p1box');
+      if (!box || box.dataset.done) return;
+      box.dataset.done = '1';
+      const line = box.querySelector('.cov-line');
+      try {
+        const d = P1_CACHE[r._id] || await (await fetch('/p1/' + r._id)).json();
+        P1_CACHE[r._id] = d;
+        if (d.error) { line.textContent = d.error; return; }
+        if (!d.schools || !d.schools.length) { line.textContent = d.note || 'No school data.'; return; }
+        const rows = d.schools.map(s => {
+          if (s.unmatched)
+            return `<li><b>${esc(s.name)}</b> <span class="kd-d">(${km(s.distance_m)})</span> — no MOE data</li>`;
+          const dist = `<span class="kd-d">(${km(s.distance_m)}${s.within_1km ? ', within 1 km ✓' : ''})</span>`;
+          const p1 = s.p1_all_offered ? 'all eligible offered'
+                   : (s.p1_vacancies != null ? `${s.p1_vacancies} vacancies` : '—');
+          const p2c = (s.p2c_vacancies != null)
+            ? `${s.p2c_applicants} applicants for ${s.p2c_vacancies} places${s.ratio ? ` (${s.ratio}×)` : ''}`
+            : '—';
+          // Your odds depend on BOTH the school's contest and your distance.
+          // MOE bands are radial (home-to-school), so within_1km/2km come from
+          // the straight-line distance, not the walking route.
+          const W = t => `<div class="p1-odds warn-t">${t}</div>`;
+          const G = t => `<div class="p1-odds good-t">${t}</div>`;
+          let odds = '';
+          const cut = s.p2c_cutoff;
+          if (cut === '1km') {
+            if (s.within_1km) odds = s.p2c_balloted
+              ? W('Within 1 km ✓, but a ballot still decided it — not guaranteed.')
+              : G('✓ Within 1 km — the group that got places last year.');
+            else odds = W('⚠ This flat is beyond 1 km (radial) — outside the band that got places last year.');
+          } else if (cut === '1-2km') {
+            if (s.within_1km) odds = G('✓ Within 1 km — this group got places before the 1–2 km ballot.');
+            else if (s.within_2km) odds = W('In the 1–2 km ballot zone last year — not guaranteed.');
+            else odds = W('⚠ Beyond 2 km — outside the bands that got places last year.');
+          } else if (cut === '>2km') {
+            odds = s.within_2km
+              ? G('✓ Within 2 km — the safe band last year (only beyond 2 km was balloted).')
+              : W('Beyond 2 km — that band was balloted last year.');
+          } else if (cut === '2km') {
+            odds = s.within_2km
+              ? G('✓ Within 2 km — the band that got places last year.')
+              : W('⚠ Beyond 2 km — outside the band that got places last year.');
+          } else if (s.p2c_balloted && s.within_1km) {
+            odds = W('Balloted last year — being within 1 km helps but isn\'t guaranteed.');
+          }
+          const beyondCut = (cut === '1km' && !s.within_1km) ||
+                            ((cut === '2km' || cut === '1-2km') && !s.within_2km);
+          const tone = beyondCut ? 'warn' : (s.tone || 'info');
+          return `<li>
+            <b>${esc(s.name)}</b> ${dist}
+            <span class="flag ${tone} p1-verdict">${esc(s.verdict)}</span>
+            <div class="p1-detail">Phase 1: ${esc(p1)} · Phase 2C: ${esc(p2c)}${
+              s.p2c_balloted && s.p2c_ballot_applicants ? ` · ballot: ${s.p2c_ballot_applicants} for ${s.p2c_ballot_vacancies} places` : ''}</div>
+            ${odds}
+          </li>`;
+        }).join('');
+        const yr = d.schools.find(s => s.year)?.year;
+        box.innerHTML = `<span class="label">🎓 P1 registration check${yr ? ` (${yr})` : ''}</span>
+          <ul class="p1-list">${rows}</ul>
+          <p class="cov-note muted">Phase 1 = sibling already in the school. <b>Phase 2C</b> = everyone else — this is the one home address decides: living <b>within 1 km</b> gets first priority in the ballot. Source: MOE past vacancies &amp; balloting data.</p>`;
+      } catch (err) { line.textContent = 'Could not load MOE data: ' + err; }
+    }
+
+    // ---- Google Maps directions ----------------------------------------------
+    function gmapsDir(r) {
+      if (r.block_lat && r.block_lon)
+        return `https://www.google.com/maps/dir/?api=1&destination=${r.block_lat},${r.block_lon}`;
+      if (r.block_street)
+        return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(r.block_street + ' Singapore')}`;
+      return null;
+    }
+
+    // ---- key details (structured summary) ------------------------------------
+    const _json = (s) => { try { return JSON.parse(s || '[]'); } catch { return []; } };
+    const km = m => m == null ? '' : (m >= 1000 ? (m / 1000).toFixed(2) + ' km' : m + ' m');
+
+    function keyDetails(r) {
+      const rows = [];
+      const add = (k, v) => { if (v) rows.push([k, v]); };
+      add('Address', r.block_street);
+      add('Town', r.town);
+      add('Price', [r.price, r.psf && `(${r.psf})`].filter(Boolean).join(' '));
+      add('Size', r.size_sqft);
+      add('Rooms', (r.beds || r.baths) ? `${r.beds || '?'} Beds / ${r.baths || '?'} Baths` : '');
+      const lease = leaseNum(r);
+      add('TOP / Lease', [r.top_year, lease != null && `${lease} yrs left`].filter(Boolean).join(' · '));
+      // Level / status come from the description skim (High floor, No extension…).
+      const tags = (r._flags || []).map(f => f.label.replace(/^\W+\s*/, ''));
+      add('Status', tags.join(', '));
+      add('Listed', r.listed_date ? `${listedText(r)} (${r.listed_date})` : '');
+
+      const schools = _json(r.schools_json), stations = _json(r.stations_json);
+      const list = (title, items) => items.length ? `
+        <div class="kd-group"><b>${title}</b>
+          <ul>${items.map(s => `<li>${esc(s.name)} <span class="kd-d">(${km(s.distance_m)}${s.walk_mins ? `, ~${s.walk_mins} min` : ''})</span></li>`).join('')}</ul>
+        </div>` : '';
+
+      return `<div class="keydet">
+        <span class="label">Key details</span>
+        <ul class="kd">${rows.map(([k, v]) => `<li><b>${esc(k)}:</b> ${esc(v)}</li>`).join('')}</ul>
+        ${list('MRT / LRT', stations.slice(0, 5))}
+        ${list('Schools nearby', schools.slice(0, 6))}
+      </div>`;
+    }
+
+    // ---- share to agent ------------------------------------------------------
+    function agentMessage(r) {
+      const L = [];
+      L.push(`🏠 ${r.block_street || 'Listing'}`);
+      const l2 = [r.price, r.size_sqft, r.psf].filter(Boolean).join(' · ');
+      if (l2) L.push(l2);
+      const l3 = [(r.beds || r.baths) ? `${r.beds || '?'} Beds / ${r.baths || '?'} Baths` : '', r.town].filter(Boolean).join(' · ');
+      if (l3) L.push(l3);
+      const lease = leaseNum(r);
+      if (lease != null) L.push(`Lease: ${lease} yrs left${r.top_year ? ` (TOP ${r.top_year})` : ''}`);
+      if (r.nearest_mrt || r.mrt_distance) L.push(`Nearest MRT: ${[r.mrt_distance, r.nearest_mrt].filter(Boolean).join(' — ')}`);
+      const flags = (r._flags || []).map(f => f.label.replace(/^\W+\s*/, '')).filter(Boolean);
+      if (flags.length) L.push(`Highlights: ${flags.join(', ')}`);
+      if (r._note) L.push(`My notes: ${r._note}`);
+      const a = afford(r);
+      if (a) L.push(`Est: ~${money(a.monthly)}/mo · ~${money(a.upfront)} upfront`);
+      if (r.block_lat && r.block_lon) L.push(`Map: https://maps.google.com/?q=${r.block_lat},${r.block_lon}`);
+      if (r.listing_url || r.url) L.push(`Listing: ${r.listing_url || r.url}`);
+      let ag = {}; try { ag = JSON.parse(r.agent_json || '{}'); } catch {}
+      if (ag.name) L.push(`Listing agent: ${ag.name}${ag.license ? ` (${ag.license})` : ''}${ag.phone ? ` ${ag.phone}` : ''}`);
+      return L.join('\n');
+    }
+
+    document.getElementById('fin-clear').addEventListener('click', () => {
+      FIN = {}; localStorage.setItem('fin', '{}');
+      ['cash', 'cpf', 'monthly'].forEach(k => document.getElementById('fin-' + k).value = '');
+      renderList();
+    });
+
+    // ---- preferences: plain-language filtering + fit scoring -----------------
+    const schoolsNum = r => { try { return JSON.parse(r.schools_json || '[]').length; } catch { return 0; } };
+    const schoolNames = r => { try { return JSON.parse(r.schools_json || '[]').map(s => (s.name || '').toLowerCase()); } catch { return []; } };
+    const mrtWalkMin = r => { const m = (r.mrt_distance || '').match(/(\d+)\s*min/); return m ? +m[1] : null; };
+
+    // Each preference: a value the user types, a scoring direction, and a
+    // hard-filter test (null value ⇒ unknown ⇒ never filtered out).
+    const PREFS = [
+      {key: 'maxPrice', label: '💰 Max budget (S$)', ph: 'e.g. 650000', dir: -1, val: priceNum,
+       pass: (r, v) => priceNum(r) == null || priceNum(r) <= v},
+      {key: 'minBeds', label: '🛏 Min bedrooms', ph: 'e.g. 3', dir: 1, val: r => numOf(r.beds),
+       pass: (r, v) => numOf(r.beds) == null || numOf(r.beds) >= v},
+      {key: 'minSize', label: '📐 Min size (sqft)', ph: 'e.g. 1100', dir: 1, val: sizeNum,
+       pass: (r, v) => sizeNum(r) == null || sizeNum(r) >= v},
+      {key: 'minLease', label: '⏳ Min lease (yrs)', ph: 'e.g. 70', dir: 1, val: leaseNum,
+       pass: (r, v) => leaseNum(r) == null || leaseNum(r) >= v},
+      {key: 'maxMrt', label: '🚶 Max MRT walk (min)', ph: 'e.g. 8', dir: -1, val: mrtWalkMin,
+       pass: (r, v) => mrtWalkMin(r) == null || mrtWalkMin(r) <= v},
+      {key: 'school', label: '🎓 Near school (name)', ph: 'e.g. Rosyth', dir: 0, text: true, val: null,
+       pass: (r, v) => !schoolNames(r).length || schoolNames(r).some(n => n.includes(v))},
+    ];
+    let PREF = (() => {
+      let p;
+      try { p = JSON.parse(localStorage.getItem('prefs') || '{}'); } catch { p = {}; }
+      // Harden against malformed/partial stored state.
+      if (!p || typeof p !== 'object') p = {};
+      p.values = p.values || {};
+      p.must = p.must || {};
+      return p;
+    })();
+    let showHidden = false;
+    const prefVal = k => { const v = PREF.values[k]; return (v === '' || v == null) ? null : v; };
+    const prefsActive = () => PREFS.some(p => prefVal(p.key) != null);
+    const savePrefs = () => localStorage.setItem('prefs', JSON.stringify(PREF));
+
+    // Rows failing any "must" preference (only when the value is known).
+    function failsMust(r) {
+      for (const p of PREFS) {
+        const v = prefVal(p.key);
+        if (v == null || !PREF.must[p.key]) continue;
+        const val = p.text ? String(v).toLowerCase() : Number(v);
+        if (!p.pass(r, val)) return true;
+      }
+      return false;
+    }
+
+    function computeScores() {
+      const numeric = PREFS.filter(p => prefVal(p.key) != null && !p.text);
+      const sv = prefVal('school');
+      if (!numeric.length && !sv) { ROWS.forEach(r => r._score = null); return; }
+      const stats = {};
+      for (const p of numeric) {
+        const vals = ROWS.map(p.val).filter(v => v != null);
+        stats[p.key] = {min: Math.min(...vals), max: Math.max(...vals)};
+      }
+      let totW = numeric.reduce((s, p) => s + (PREF.must[p.key] ? 2 : 1), 0);
+      if (sv) totW += PREF.must.school ? 2 : 1;
+      totW = totW || 1;
+      const svl = sv ? String(sv).toLowerCase() : null;
+      for (const r of ROWS) {
+        let sum = 0;
+        for (const p of numeric) {
+          const w = PREF.must[p.key] ? 2 : 1;
+          const v = p.val(r); const {min, max} = stats[p.key];
+          let norm = 0.5;                          // neutral when unknown
+          if (v != null && max > min) { norm = (v - min) / (max - min); if (p.dir < 0) norm = 1 - norm; }
+          else if (v != null) norm = 1;
+          sum += w * norm;
+        }
+        if (svl) {
+          const names = schoolNames(r);
+          const hit = names.some(n => n.includes(svl));
+          r._schoolHit = hit;
+          sum += (PREF.must.school ? 2 : 1) * (names.length ? (hit ? 1 : 0) : 0.5);
+        }
+        r._score = Math.round(sum / totW * 100);
+      }
+    }
+
+    // ---- top picks -----------------------------------------------------------
+    function reasonsFor(r, pool) {
+      const reasons = [];
+      const rank = (fn, dir) => {
+        const vals = pool.map(fn).filter(v => v != null).sort((a, b) => (a - b) * dir);
+        const v = fn(r);
+        return v == null ? null : vals.indexOf(v) + 1;
+      };
+      const pRank = rank(priceNum, 1);
+      if (pRank === 1) reasons.push('cheapest of the lot');
+      else if (pRank === 2) reasons.push('2nd cheapest');
+      const sRank = rank(sizeNum, -1);
+      if (sRank === 1) reasons.push(`biggest (${r.size_sqft})`);
+      const walk = mrtWalkMin(r);
+      if (walk != null && walk <= (Number(prefVal('maxMrt')) || 10)) reasons.push(`${walk}-min walk to ${(r.nearest_mrt || 'MRT').replace(/ (MRT|LRT) Station$/i, '')}`);
+      const lease = leaseNum(r);
+      if (lease != null && lease >= 80) reasons.push(`${lease}-yr lease`);
+      if (r._schoolHit) {
+        const sp = (prefVal('school') || '').toLowerCase();
+        const sc = _json(r.schools_json).find(s => (s.name || '').toLowerCase().includes(sp));
+        reasons.push(sc ? `${sc.name.replace(/ (Primary )?School$/i, '')} ${km(sc.distance_m)} away` : `near ${prefVal('school')}`);
+      }
+      if ((r._flags || []).some(f => f.label.includes('No extension'))) reasons.push('no extension needed');
+      if (r._price_change && r._price_change.delta < 0) reasons.push(`price dropped ${Math.abs(r._price_change.pct)}%`);
+      return reasons.slice(0, 3);
+    }
+
+    function renderTopPicks(visibleRows) {
+      const box = document.getElementById('toppicks');
+      const scored = visibleRows.filter(r => r._score != null && r._status !== 'rejected');
+      if (!prefsActive() || scored.length < 2) { box.classList.add('hidden'); return; }
+      // Tie-break equal scores by price, and never show the same block twice.
+      const sorted = [...scored].sort((a, b) =>
+        (b._score - a._score) || ((priceNum(a) || 9e9) - (priceNum(b) || 9e9)));
+      const seenBlk = new Set();
+      const picks = [];
+      for (const r of sorted) {
+        const k = (r.block_street || '') || ('#' + r._id);
+        if (seenBlk.has(k)) continue;
+        seenBlk.add(k);
+        picks.push(r);
+        if (picks.length === 3) break;
+      }
+      box.classList.remove('hidden');
+      document.getElementById('toppicks-cards').innerHTML = picks.map((r, i) => `
+        <div class="tp-card ${i === 0 ? 'best' : ''}" data-id="${r._id}">
+          ${i === 0 ? '<span class="tp-badge">🏆 Best for you</span>' : ''}
+          <div class="tp-top">
+            ${r.thumbnail ? `<img src="${esc(r.thumbnail)}" loading="lazy" alt="">` : '<span class="tp-ph">🏠</span>'}
+            <div>
+              <b>${esc(r.block_street) || '—'}</b>
+              <div class="tp-price">${esc(r.price) || ''} <span class="score-pill" style="--s:${r._score}">${r._score}</span></div>
+            </div>
+          </div>
+          <p class="tp-why">${reasonsFor(r, scored).map(esc).join(' · ') || 'strong overall fit'}</p>
+        </div>`).join('');
+      document.querySelectorAll('.tp-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${card.dataset.id}"]`));
+          if (item) {
+            item.scrollIntoView({behavior: 'smooth', block: 'center'});
+            if (!item.classList.contains('open')) item.querySelector('.chev').click();
+          }
+        });
+      });
+    }
+
+    function renderPrefs() {
+      document.getElementById('prefs').innerHTML = PREFS.map(p => `
+        <label class="pref">
+          <span>${p.label}</span>
+          <input type="${p.text ? 'text' : 'number'}" data-key="${p.key}" value="${PREF.values[p.key] ?? ''}" placeholder="${p.ph}">
+          <label class="must" title="Must-have — hide listings that fail this"><input type="checkbox" data-must="${p.key}" ${PREF.must[p.key] ? 'checked' : ''}>must</label>
+        </label>`).join('');
+      document.querySelectorAll('#prefs input[data-key]').forEach(inp => {
+        inp.addEventListener('input', () => { PREF.values[inp.dataset.key] = inp.value; savePrefs(); renderListSoon(); });
+      });
+      document.querySelectorAll('#prefs input[data-must]').forEach(inp => {
+        inp.addEventListener('change', () => { PREF.must[inp.dataset.must] = inp.checked; savePrefs(); renderList(); });
+      });
+    }
+    document.getElementById('setup-toggle').addEventListener('click', () => {
+      const p = document.getElementById('setup-panel');
+      p.classList.toggle('hidden');
+      document.getElementById('setup-toggle').classList.toggle('active', !p.classList.contains('hidden'));
+    });
+    document.getElementById('score-clear').addEventListener('click', () => {
+      PREF = {values: {}, must: {}}; savePrefs(); renderPrefs(); renderList();
+    });
+    // ---- saved searches ------------------------------------------------------
+    async function loadSearches() {
+      const d = await (await fetch('/searches')).json();
+      const el = document.getElementById('searches-list');
+      el.innerHTML = d.searches.length ? d.searches.map(s => `
+        <div class="search-row" data-id="${s.id}">
+          <span class="search-name" title="${esc(s.url)}">${esc(s.name)}</span>
+          <button class="ghost s-refresh" data-id="${s.id}" title="Pull latest listings">🔄 Refresh</button>
+          <button class="ghost s-del" data-id="${s.id}" title="Remove">✕</button>
+        </div>`).join('') : '<p class="muted">No saved searches yet.</p>';
+      el.querySelectorAll('.s-refresh').forEach(b => b.addEventListener('click', () => refreshSearch(b.dataset.id)));
+      el.querySelectorAll('.s-del').forEach(b => b.addEventListener('click', async () => {
+        await fetch('/searches/delete', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: b.dataset.id})});
+        loadSearches();
+      }));
+    }
+    async function refreshSearch(id) {
+      const msg = document.getElementById('search-msg');
+      msg.textContent = 'Refreshing… a Chrome window will open. This can take a minute.';
+      try {
+        const res = await fetch('/searches/refresh', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+        const d = await res.json();
+        if (!res.ok) { msg.textContent = d.error || 'Refresh failed.'; return; }
+        msg.textContent = `✔ ${d.imported} new listing(s)${d.removed ? `, ${d.removed} duplicate(s) removed` : ''}.`;
+        await loadList();
+        if (ROWS.some(r => !r._deep)) runDeepenAll();
+      } catch (err) { msg.textContent = 'Failed: ' + err; }
+    }
+    document.getElementById('search-save').addEventListener('click', async () => {
+      const inp = document.getElementById('search-url');
+      const url = inp.value.trim();
+      const msg = document.getElementById('search-msg');
+      if (!/propertyguru/.test(url) || /\/listing\//.test(url)) { msg.textContent = 'Paste a PropertyGuru search-results URL.'; return; }
+      msg.textContent = 'Saving…';
+      const res = await fetch('/searches/add', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url})});
+      const d = await res.json();
+      if (!res.ok) { msg.textContent = d.error || 'Could not save.'; return; }
+      inp.value = '';
+      await loadSearches();
+      refreshSearch(d.id);       // pull its listings straight away
+    });
+
+    // Overflow (⋯) menu
+    document.getElementById('more-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('more-menu').classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => document.getElementById('more-menu').classList.add('hidden'));
+    document.getElementById('recheck-starred').addEventListener('click', async () => {
+      const n = ROWS.filter(r => r._starred).length;
+      if (!n) { setStatus('warn', 'Star (★) some listings first — this re-checks your shortlist.'); return; }
+      setStatus('loading', `Re-checking prices on ${Math.min(n, 12)} shortlisted listing(s)… a Chrome window will open.`);
+      try {
+        const res = await fetch('/recheck-batch', {method: 'POST'});
+        const d = await res.json();
+        if (!res.ok) { setStatus('error', d.error || 'Failed.'); return; }
+        if (d.changed.length) {
+          setStatus('warn', '💰 Price changes: ' + d.changed.map(c =>
+            `${c.street}: S$${c.old.toLocaleString()} → S$${c.new.toLocaleString()}`).join(' · '));
+        } else {
+          setStatus('hint', `✔ Checked ${d.checked} shortlisted listing(s) — no price changes.`);
+        }
+        await loadList();
+      } catch (err) { setStatus('error', 'Failed: ' + err); }
+    });
+
+    // ---- rendering the list --------------------------------------------------
+    function currentView() {
+      const q = document.getElementById('filter').value.trim().toLowerCase();
+      let rows = ROWS.filter(tabMatch).filter(r =>
+        !q || (r.block_street || '').toLowerCase().includes(q) || (r.nearest_mrt || '').toLowerCase().includes(q));
+      // Hard-filter by "must" preferences.
+      let hidden = 0;
+      if (!showHidden) {
+        rows = rows.filter(r => { if (failsMust(r)) { hidden++; return false; } return true; });
+      } else {
+        hidden = ROWS.filter(failsMust).length;
+      }
+      const note = document.getElementById('filter-note');
+      const anyMust = PREFS.some(p => PREF.must[p.key] && prefVal(p.key) != null);
+      if (anyMust && (hidden > 0 || showHidden)) {
+        note.classList.remove('hidden');
+        note.innerHTML = showHidden
+          ? `Showing all, including ${hidden} that fail your must-haves. <button class="linkbtn" id="hide-toggle">Hide them</button>`
+          : `${hidden} listing(s) hidden by your must-haves. <button class="linkbtn" id="hide-toggle">Show them</button>`;
+        note.querySelector('#hide-toggle').addEventListener('click', () => { showHidden = !showHidden; renderList(); });
+      } else {
+        note.classList.add('hidden');
+      }
+      const s = document.getElementById('sort').value;
+      const by = (f, dir = 1) => (a, b) => { const x = f(a), y = f(b); if (x == null) return 1; if (y == null) return -1; return (x - y) * dir; };
+      if (s === 'price_asc') rows.sort(by(priceNum, 1));
+      else if (s === 'price_desc') rows.sort(by(priceNum, -1));
+      else if (s === 'size_desc') rows.sort(by(sizeNum, -1));
+      else if (s === 'size_asc') rows.sort(by(sizeNum, 1));
+      else if (s === 'lease_desc') rows.sort(by(leaseNum, -1));
+      else if (s === 'lease_asc') rows.sort(by(leaseNum, 1));
+      else if (s === 'mrt_asc') rows.sort(by(mrtNum, 1));
+      else if (s === 'psf_asc') rows.sort(by(psfNum, 1));
+      else if (s === 'score_desc') rows.sort(by(r => r._score, -1));
+      // 'newest' keeps the /results order (already newest-first)
+      // Rejected listings always sink to the bottom.
+      rows.sort((a, b) => (a._status === 'rejected') - (b._status === 'rejected'));
+      return rows;
+    }
+
+    // ---- tabs: All / Shortlisted / by town -----------------------------------
+    let TAB = 'all';
+    const townsPresent = () => [...new Set(ROWS.map(r => r.town).filter(Boolean))].sort();
+    function tabMatch(r) {
+      if (TAB === 'shortlist') return r._starred;
+      if (TAB.startsWith('town:')) return r.town === TAB.slice(5);
+      return true;
+    }
+    function renderTabs() {
+      const towns = townsPresent();
+      const short = ROWS.filter(r => r._starred).length;
+      const defs = [{key: 'all', label: `All ${ROWS.length}`}];
+      if (short) defs.push({key: 'shortlist', label: `★ Shortlisted ${short}`});
+      for (const t of towns) defs.push({key: 'town:' + t, label: `${t} ${ROWS.filter(r => r.town === t).length}`});
+      const worth = ROWS.length > 0 && (towns.length > 1 || short > 0);
+      const tabsEl = document.getElementById('tabs');
+      tabsEl.classList.toggle('hidden', !worth);
+      tabsEl.innerHTML = defs.map(d => `<button class="tab ${TAB === d.key ? 'on' : ''}" data-key="${d.key}">${esc(d.label)}</button>`).join('');
+      tabsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { TAB = b.dataset.key; renderList(); }));
+    }
+
+    // ---- area overview map (blocks only) -------------------------------------
+    let OV = localStorage.getItem('ovmap') === '1';
+    function updateOverview(rows) {
+      const ids = rows.filter(r => r.block_lat && r._status !== 'rejected').map(r => r._id);
+      const wrap = document.getElementById('ovwrap');
+      wrap.classList.toggle('hidden', !ids.length);
+      if (!ids.length) return;
+      document.getElementById('ov-toggle').textContent =
+        OV ? '🗺 Hide area map' : `🗺 Area map (${ids.length})`;
+      const f = document.getElementById('ov-map');
+      f.classList.toggle('hidden', !OV);
+      if (OV) {
+        const src = '/map-overview?ids=' + ids.join(',') + '&theme=' + theme();
+        if (f.dataset.cur !== src) { f.dataset.cur = src; f.src = src; }
+      }
+    }
+    document.getElementById('ov-toggle').addEventListener('click', () => {
+      OV = !OV;
+      localStorage.setItem('ovmap', OV ? '1' : '');
+      renderList();
+    });
+
+    function renderList() {
+      computeScores();
+      // Reset to All if the active town tab no longer exists.
+      if (TAB.startsWith('town:') && !townsPresent().includes(TAB.slice(5))) TAB = 'all';
+      if (TAB === 'shortlist' && !ROWS.some(r => r._starred)) TAB = 'all';
+      renderTabs();
+      const rows = currentView();
+      updateOverview(rows);
+      document.getElementById('count').textContent =
+        rows.length === ROWS.length ? `🏠 ${ROWS.length}` : `🏠 ${rows.length} / ${ROWS.length}`;
+      renderTopPicks(rows);
+      listEl.innerHTML = '';
+      emptyEl.style.display = rows.length ? 'none' : 'block';
+      document.getElementById('list-head').style.display = rows.length ? 'grid' : 'none';
+      for (const r of rows) {
+        const item = document.createElement('div');
+        item.className = 'item';
+        const link = r.listing_url || r.url;
+        const chips = [...(r._flags || [])];
+        // Preferred school: show WHICH school and HOW FAR (≤1 km = balloting priority).
+        const sp = (prefVal('school') || '').toLowerCase();
+        if (sp) {
+          const sc = _json(r.schools_json).find(s => (s.name || '').toLowerCase().includes(sp));
+          if (sc) chips.unshift({
+            label: `🎓 ${sc.name.replace(/ (Primary )?School$/i, '')} ${km(sc.distance_m)}${sc.distance_m <= 1000 ? ' ✓' : ''}`,
+            tone: sc.distance_m <= 1000 ? 'good' : 'info'
+          });
+        }
+        const ac = affordChip(r);
+        if (ac) chips.unshift(ac);
+        const cc = commuteChip(r);
+        if (cc) chips.unshift(cc);
+        if (r._status) chips.unshift({label: STATUS_LABEL[r._status] || r._status, tone: 'status ' + r._status});
+        item.innerHTML = `
+          <div class="item-head">
+            <input type="checkbox" class="pick" data-id="${r._id}" ${selected.has(r._id) ? 'checked' : ''} title="Select to compare">
+            <div class="col title">
+              ${r.thumbnail ? `<img class="thumb" src="${esc(r.thumbnail)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<span class="thumb ph">🏠</span>'}
+              <div class="title-inner">
+                <span class="title-line">
+                  <button class="star ${r._starred ? 'on' : ''}" title="Shortlist">${r._starred ? '★' : '☆'}</button>
+                  ${r._score != null ? `<span class="score-pill" style="--s:${r._score}" title="Score ${r._score}">${r._score}</span>` : ''}
+                  ${r._dup ? `<span class="warn" title="${esc(r._dup_reason)}">⚠️</span>` : ''}
+                  <span class="src ${(r._source || 'PG').toLowerCase()}">${esc(r._source || 'PG')}</span>
+                  <span class="tname">${esc(r.block_street) || '—'}</span>
+                  ${gmapsDir(r) ? `<a class="dirlink" href="${esc(gmapsDir(r))}" target="_blank" rel="noopener" title="Directions in Google Maps">📍</a>` : ''}
+                </span>
+                ${((r.beds || r.baths) || chips.length) ? `<span class="flags">${(r.beds || r.baths) ? `<span class="bb">${esc(r.beds||'?')}🛏 ${esc(r.baths||'?')}🛁</span>` : ''}${chips.slice(0, 5).map(f => `<span class="flag ${f.tone}">${esc(f.label)}</span>`).join('')}${chips.length > 5 ? `<span class="flag more" title="${esc(chips.slice(5).map(f => f.label).join(', '))}">+${chips.length - 5}</span>` : ''}</span>` : ''}
+              </div>
+            </div>
+            <div class="meta">
+              <div class="col price" data-label="Price">${esc(r.price) || '—'}${priceChangeChip(r)}${(() => { const a = affordability(r); return a ? `<span class="mo">~${money(a.monthly)}/mo</span>` : ''; })()}</div>
+              <div class="col size" data-label="Size">${esc(r.size_sqft) || '—'}${psfNum(r) ? `<span class="mo">S$${psfNum(r).toLocaleString()} psf</span>` : ''}</div>
+              <div class="col mrt" data-label="MRT">${esc(mrtLine(r))}</div>
+              <div class="col top" data-label="TOP">${esc(r.top_year) || '—'}</div>
+              <div class="col lease" data-label="Lease">${leaseText(r)}</div>
+              <div class="col listed" data-label="Listed" title="${esc(r.listed_date || '')}">${listedText(r)}</div>
+            </div>
+            <button class="reject ${r._status === 'rejected' ? 'on' : ''}" title="${r._status === 'rejected' ? 'Un-reject' : 'Not for me'}">👎</button>
+            <button class="chev" title="Details">▾</button>
+            <button class="del" data-id="${r._id}" title="Remove">✕</button>
+          </div>
+          <div class="item-body">
+            <div class="track">
+              <label class="track-status">Status
+                <select class="status-sel">
+                  <option value="">—</option>
+                  <option value="viewing" ${r._status==='viewing'?'selected':''}>Viewing</option>
+                  <option value="offered" ${r._status==='offered'?'selected':''}>Offered</option>
+                  <option value="rejected" ${r._status==='rejected'?'selected':''}>Rejected</option>
+                </select>
+              </label>
+              <button class="ghost recheck" data-id="${r._id}">🔄 Re-check price</button>
+              <span class="recheck-msg muted"></span>
+            </div>
+            <textarea class="note" placeholder="Your notes…">${esc(r._note)}</textarea>
+            ${keyDetails(r)}
+            ${r._deep && r.price ? '<div class="covbox"><span class="label">💵 Potential COV (est.)</span><p class="cov-line muted">Checking recent transactions…</p></div>' : ''}
+            ${r._deep && r.schools_json && r.schools_json !== '[]' ? '<div class="p1box"><span class="label">🎓 P1 registration check</span><p class="cov-line muted">Checking MOE balloting data…</p></div>' : ''}
+            ${(() => {
+              const a = afford(r);
+              if (!a) return '';
+              let personal = '';
+              if (finActive()) {
+                const bits = [];
+                if (a.upfrontOk != null) bits.push(a.upfrontOk
+                  ? `✓ your ${money(a.have)} covers the upfront (${money(-a.upfrontGap)} to spare)`
+                  : `⚠ upfront short by <b>${money(a.upfrontGap)}</b> (you have ${money(a.have)})`);
+                if (a.monthlyOk != null) bits.push(a.monthlyOk
+                  ? `✓ within your ${money(Number(FIN.monthly))}/mo budget`
+                  : `⚠ ${money(a.monthlyGap)}/mo over your ${money(Number(FIN.monthly))}/mo budget`);
+                if (bits.length) personal = `<p class="afford-you">${bits.join(' &nbsp;·&nbsp; ')}</p>`;
+              }
+              return `<div class="afford"><span class="label">Affordability (est.)</span>
+                <p class="afford-line"><b>~${money(a.monthly)}/mo</b> mortgage (75% loan, 25 yrs @ 2.6%) &nbsp;·&nbsp; <b>~${money(a.upfront)}</b> cash/CPF upfront (${money(a.down)} down-payment + ${money(a.duty)} stamp duty)</p>
+                ${personal}</div>`;
+            })()}
+            ${(() => { let g = []; try { g = JSON.parse(r.images_json || '[]'); } catch {} return g.length ? `
+              <div class="gallery-wrap"><span class="label">Photos (${g.length})</span>
+                <div class="gallery">${g.map(im => `<a href="${esc(im.url)}" target="_blank" rel="noopener"><img src="${esc(im.url)}" loading="lazy" alt="${esc(im.caption)}" title="${esc(im.caption)}"></a>`).join('')}</div>
+              </div>` : ''; })()}
+            ${r.about ? `<div class="about"><span class="label">About this property</span><p class="about-text">${esc(r.about)}</p></div>` : ''}
+            <p class="linkline">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">View original listing ↗</a>` : ''}${gmapsDir(r) ? `${link ? ' &nbsp;·&nbsp; ' : ''}<a href="${esc(gmapsDir(r))}" target="_blank" rel="noopener">📍 Directions in Google Maps ↗</a>` : ''}</p>
+            ${r._deep ? `
+              <div class="share-wrap">
+                ${(() => { let ag = {}; try { ag = JSON.parse(r.agent_json || '{}'); } catch {} return ag.name ? `<p class="agent-line"><span class="label">Listing agent</span> ${esc(ag.name)}${ag.license ? ` · ${esc(ag.license)}` : ''}${ag.phone ? ` · <a href="tel:${esc((ag.phone||'').replace(/[^\\d+]/g,''))}">${esc(ag.phone)}</a>` : ''}</p>` : ''; })()}
+                <button class="ghost accent share-btn" type="button">📤 Send to my agent</button>
+                <div class="share hidden">
+                  <textarea class="share-msg" rows="10"></textarea>
+                  <div class="share-row">
+                    <input class="myagent" type="text" placeholder="Your agent's WhatsApp, e.g. +65 9123 4567">
+                    <button class="ghost share-copy" type="button">📋 Copy</button>
+                    <button class="ghost accent share-wa" type="button">🟢 WhatsApp</button>
+                  </div>
+                  <p class="share-hint muted"></p>
+                </div>
+              </div>` : ''}
+            ${!r._deep ? '<p class="deepen-msg muted">Full details (TOP, lease, map) load when you open this…</p>' : ''}
+            ${r._mappable ? `<iframe class="rowmap" data-src="/map/${r._id}" title="Map" loading="lazy"></iframe>` : (r._deep ? '<p class="muted">No map data for this listing.</p>' : '')}
+          </div>`;
+        listEl.appendChild(item);
+
+        const body = item.querySelector('.item-body');
+        const toggle = async () => {
+          const open = item.classList.toggle('open');
+          if (open && !r._deep) return deepenRow(r, item);
+          if (open) { ensureCov(item, r); ensureP1(item, r); ensureBlock(item, r); }
+          const f = item.querySelector('.rowmap');
+          if (open && f && !f.src && f.dataset.src) f.src = f.dataset.src + '?theme=' + theme();
+        };
+        item.querySelector('.chev').addEventListener('click', toggle);
+        item.querySelector('.title').addEventListener('click', toggle);
+        item.querySelector('.dirlink')?.addEventListener('click', e => e.stopPropagation());
+
+        item.querySelector('.del').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm('Remove this entry?')) return;
+          await fetch('/delete', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: r._id})});
+          selected.delete(r._id);
+          await loadList();
+        });
+        item.querySelector('.pick').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (e.target.checked) selected.add(r._id); else selected.delete(r._id);
+          updateCompareBtn();
+        });
+
+        // One-tap reject / un-reject
+        item.querySelector('.reject').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const nv = r._status === 'rejected' ? '' : 'rejected';
+          await patchRow(r._id, {status: nv});
+          r._status = nv;
+          renderList();
+        });
+        // Star / shortlist
+        item.querySelector('.star').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const on = !r._starred;
+          await patchRow(r._id, {starred: on});
+          r._starred = on;
+          e.target.classList.toggle('on', on);
+          e.target.textContent = on ? '★' : '☆';
+          if (TAB === 'shortlist') renderList(); else renderTabs();
+        });
+        // Status
+        item.querySelector('.status-sel').addEventListener('change', async (e) => {
+          e.stopPropagation();
+          await patchRow(r._id, {status: e.target.value});
+          r._status = e.target.value;
+          renderList();
+        });
+        item.querySelector('.status-sel').addEventListener('click', e => e.stopPropagation());
+        // Notes (save on blur)
+        const note = item.querySelector('.note');
+        note.addEventListener('click', e => e.stopPropagation());
+        note.addEventListener('blur', async () => {
+          if (note.value !== r._note) { await patchRow(r._id, {note: note.value}); r._note = note.value; }
+        });
+        // Re-check price
+        item.querySelector('.recheck').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const msg = item.querySelector('.recheck-msg');
+          const btn = e.currentTarget;
+          btn.disabled = true; msg.textContent = 'Re-loading listing… a Chrome window will open.';
+          try {
+            const res = await fetch('/recheck', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: r._id})});
+            const d = await res.json();
+            if (!res.ok) { msg.textContent = d.error || 'Failed.'; }
+            else if (d.changed) { msg.textContent = `Price ${d.new_price > d.old_price ? 'rose' : 'dropped'} from S$${d.old_price.toLocaleString()} to S$${d.new_price.toLocaleString()}.`; await loadList(r._id); }
+            else { msg.textContent = 'No price change.'; }
+          } catch (err) { msg.textContent = 'Failed: ' + err; }
+          finally { btn.disabled = false; }
+        });
+
+        // Send to my agent (WhatsApp / copy)
+        const shareBtn = item.querySelector('.share-btn');
+        if (shareBtn) {
+          const box = item.querySelector('.share');
+          const msgEl = item.querySelector('.share-msg');
+          const myInp = item.querySelector('.myagent');
+          const hint = item.querySelector('.share-hint');
+          const savedNum = () => (JSON.parse(localStorage.getItem('myagent') || '{}')).phone || '';
+          [box, msgEl, myInp].forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+          shareBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const opening = box.classList.contains('hidden');
+            box.classList.toggle('hidden');
+            if (opening) { msgEl.value = agentMessage(r); myInp.value = savedNum(); hint.textContent = ''; }
+          });
+          myInp.addEventListener('input', () => localStorage.setItem('myagent', JSON.stringify({phone: myInp.value})));
+          item.querySelector('.share-copy').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try { await navigator.clipboard.writeText(msgEl.value); hint.textContent = '✓ Copied — paste into any chat.'; }
+            catch { msgEl.select(); hint.textContent = 'Press ⌘/Ctrl+C to copy.'; }
+          });
+          item.querySelector('.share-wa').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const num = (myInp.value || '').replace(/[^\d]/g, '');
+            if (!num) { hint.textContent = "Enter your agent's WhatsApp number first."; myInp.focus(); return; }
+            localStorage.setItem('myagent', JSON.stringify({phone: myInp.value}));
+            window.open(`https://wa.me/${num}?text=${encodeURIComponent(msgEl.value)}`, '_blank');
+            hint.textContent = 'Opening WhatsApp…';
+          });
+        }
+      }
+    }
+
+    async function patchRow(id, fields) {
+      await fetch('/update', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, ...fields})});
+    }
+    async function deepenRow(r, item) {
+      const msg = item.querySelector('.deepen-msg');
+      if (msg) msg.textContent = 'Loading full details… a Chrome window will open briefly.';
+      try {
+        const res = await fetch('/deepen', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: r._id})});
+        const d = await res.json();
+        if (!res.ok) { if (msg) msg.textContent = d.error || 'Could not load details.'; return; }
+        await loadList(r._id);            // re-render with full data + map, reopened
+      } catch (err) { if (msg) msg.textContent = 'Failed: ' + err; }
+    }
+    const STATUS_LABEL = {viewing: '👁 Viewing', offered: '📝 Offered', rejected: '✕ Rejected'};
+
+    // ---- commute -------------------------------------------------------------
+    let COMMUTE = JSON.parse(localStorage.getItem('commute') || '{}');
+    function commuteChip(r) {
+      // Keyed by listing URL so times survive row deletions/re-imports.
+      const t = (COMMUTE.times || {})[r.listing_url || r.url];
+      if (!t) return null;
+      const parts = [];
+      if (t.transit != null) parts.push(t.transit + ' min transit');
+      if (t.drive != null) parts.push(t.drive + ' min drive');
+      if (!parts.length) return null;
+      return {label: '🕒 ' + parts.join(' · '), tone: 'info'};
+    }
+    document.getElementById('commute-dest').value = COMMUTE.dest || '';
+    document.getElementById('commute-go').addEventListener('click', async () => {
+      const dest = document.getElementById('commute-dest').value.trim();
+      const msg = document.getElementById('commute-msg');
+      if (!dest) { msg.textContent = 'Enter an address.'; return; }
+      msg.textContent = 'Routing…';
+      try {
+        const res = await fetch('/commute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({dest, ids: ROWS.map(r => r._id)})});
+        const d = await res.json();
+        if (!res.ok) { msg.textContent = d.error || 'Failed.'; return; }
+        COMMUTE = {dest: d.dest, times: d.times};
+        localStorage.setItem('commute', JSON.stringify(COMMUTE));
+        msg.textContent = `to ${d.dest}`;
+        renderList();
+      } catch (err) { msg.textContent = 'Failed: ' + err; }
+    });
+    function priceChangeChip(r) {
+      const c = r._price_change;
+      if (!c) return '';
+      const down = c.delta < 0;
+      const amt = 'S$' + Math.abs(c.delta).toLocaleString();
+      return ` <span class="pchg ${down ? 'down' : 'up'}" title="Since first saved (${c.checks} checks)">${down ? '▼' : '▲'} ${amt} (${c.pct}%)</span>`;
+    }
+
+    function updateDeepenBtn() {
+      const n = ROWS.filter(r => !r._deep).length;
+      const btn = document.getElementById('deepen-all');
+      btn.classList.toggle('hidden', n === 0);
+      btn.textContent = `⬇ Load all details (${n})`;
+    }
+    let deepening = false;
+    async function runDeepenAll() {
+      if (deepening) return;
+      deepening = true;
+      const btn = document.getElementById('deepen-all');
+      btn.disabled = true;
+      const total = ROWS.filter(r => !r._deep).length;
+      let done = 0;
+      try {
+        while (true) {
+          setStatus('loading', `Loading full details… ${done}/${total} done. A Chrome window will open; you can keep working. If a verification checkbox appears in that window, click it once.`);
+          const res = await fetch('/deepen-all', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({limit: 10})});
+          const d = await res.json();
+          if (!res.ok) { setStatus('error', d.error || 'Failed.'); break; }
+          done = total - d.remaining;
+          await loadList();                 // show details filling in progressively
+          if (d.remaining === 0) { setStatus('hint', `✔ Loaded full details for ${total} listing(s).`); break; }
+        }
+      } catch (err) { setStatus('error', 'Failed: ' + err); }
+      finally { btn.disabled = false; deepening = false; }
+    }
+    document.getElementById('deepen-all').addEventListener('click', runDeepenAll);
+
+    async function loadList(openId) {
+      const data = await (await fetch('/results')).json();
+      ROWS = data.rows;
+      // The getting-started hint has done its job once listings exist.
+      if (ROWS.length && statusEl.dataset.intro) setStatus('hidden', '');
+      // prune selections that no longer exist
+      const ids = new Set(ROWS.map(r => r._id));
+      [...selected].forEach(id => { if (!ids.has(id)) selected.delete(id); });
+      renderList();
+      updateCompareBtn();
+      updateDeepenBtn();
+      if (openId != null) {
+        const item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${openId}"]`));
+        if (item) {
+          item.classList.add('open');
+          const f = item.querySelector('.rowmap');
+          if (f && !f.src) f.src = f.dataset.src + '?theme=' + theme();
+          const row = ROWS.find(x => x._id === openId);
+          if (row) { ensureCov(item, row); ensureP1(item, row); ensureBlock(item, row); }
+          item.scrollIntoView({behavior:'smooth', block:'center'});
+        }
+      }
+    }
+
+    document.getElementById('filter').addEventListener('input', renderListSoon);
+    document.getElementById('sort').addEventListener('change', renderList);
+    document.getElementById('delete-all').addEventListener('click', async () => {
+      if (!ROWS.length) return;
+      if (!confirm(`Delete all ${ROWS.length} saved listing(s)? This cannot be undone.`)) return;
+      await fetch('/delete-all', {method: 'POST'});
+      selected.clear();
+      await loadList();
+      setStatus('hint', 'Cleared. Paste a listing or search URL to start again.');
+    });
+
+    // ---- compare -------------------------------------------------------------
+    function updateCompareBtn() {
+      const btn = document.getElementById('compare');
+      btn.textContent = `Compare (${selected.size})`;
+      btn.disabled = selected.size < 2;
+    }
+    document.getElementById('compare').addEventListener('click', () => {
+      const ids = [...selected];
+      const rows = ids.map(id => ROWS.find(r => r._id === id)).filter(Boolean);
+      // summary chips
+      const withVal = (f) => rows.map(r => ({r, v: f(r)})).filter(o => o.v != null);
+      const pick = (arr, best) => arr.length ? arr.reduce((a, b) => best(a.v, b.v) ? a : b).r : null;
+      const cheapest = pick(withVal(priceNum), (a, b) => a <= b);
+      const biggest = pick(withVal(sizeNum), (a, b) => a >= b);
+      const closest = pick(withVal(mrtNum), (a, b) => a <= b);
+      const chip = (icon, label, r, extra) => r ? `<span class="chip"><b>${icon} ${label}:</b> ${esc(r.block_street)} <em>${esc(extra)}</em></span>` : '';
+      document.getElementById('compare-summary').innerHTML =
+        chip('💰', 'Cheapest', cheapest, cheapest && cheapest.price) +
+        chip('📐', 'Biggest', biggest, biggest && biggest.size_sqft) +
+        chip('🚇', 'Closest MRT', closest, closest && closest.mrt_distance);
+      const f = document.getElementById('compare-map');
+      f.dataset.src = '/map-compare?ids=' + ids.join(',');
+      f.src = f.dataset.src + '&theme=' + theme();
+      const wrap = document.getElementById('comparewrap');
+      wrap.classList.remove('hidden');
+      wrap.scrollIntoView({behavior: 'smooth', block: 'start'});
+    });
+    document.getElementById('compare-close').addEventListener('click', () =>
+      document.getElementById('comparewrap').classList.add('hidden'));
+
+    // ---- extraction ----------------------------------------------------------
+    const urlEl = document.getElementById('url');
+    urlEl.addEventListener('input', () => { urlEl.style.height = 'auto'; urlEl.style.height = Math.min(urlEl.scrollHeight, 160) + 'px'; });
+    urlEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('form').requestSubmit(); } });
+    document.getElementById('example').addEventListener('click', () => {
+      urlEl.value = 'https://www.propertyguru.com.sg/listing/hdb-for-sale-261b-sengkang-east-way-500060706';
+    });
+
+    const isSearchUrl = u => /propertyguru/.test(u) && !/\/listing\//.test(u) &&
+      /(property-for-sale|property-for-rent|\/search|freetext=|listing-type=)/.test(u);
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const all = urlEl.value.split(/\s+/).filter(u => /propertyguru|srx\.com/.test(u));
+      if (!all.length) { setStatus('error', 'Paste a listing URL, or a PropertyGuru search-results URL to import many.'); return; }
+      const searches = all.filter(isSearchUrl);
+      const urls = all.filter(u => !isSearchUrl(u));
+      go.disabled = true;
+      try {
+        // Bulk-import any search-results URLs first (one quiet fetch each).
+        if (searches.length) {
+          setStatus('loading', `Importing all listings from the search (walking every page)… a Chrome window will open. This can take a minute or two. If a verification checkbox appears in that window, click it once.`);
+          let imported = 0, skipped = 0, capped = false, totalPages = 0, err = '';
+          for (const su of searches) {
+            const res = await fetch('/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: su})});
+            const d = await res.json();
+            if (!res.ok) { err = d.error || 'Import failed.'; break; }
+            imported += d.imported; skipped += d.skipped;
+            if (d.capped) { capped = true; totalPages = Math.max(totalPages, d.total_pages); }
+          }
+          if (err) setStatus('error', err);
+          else {
+            let msg = `✔ Imported ${imported} listing(s)${skipped ? `, skipped ${skipped} already saved` : ''}.`;
+            if (capped) msg += ` This search has ${totalPages} pages — I imported the first ${20}. Add more filters on PropertyGuru (price, size, room type) to narrow it.`;
+            setStatus(capped ? 'warn' : 'hint', msg);
+          }
+          urlEl.value = ''; urlEl.style.height = 'auto';
+          await loadList();
+          // Automatically fill in TOP/lease/maps for the new rows.
+          if (!err && ROWS.some(r => !r._deep)) runDeepenAll();
+          if (!urls.length) { go.disabled = false; return; }
+        }
+        if (urls.length === 1) {
+          setStatus('loading', 'Loading listing… a Chrome window will open. Please wait. If a verification checkbox appears in that window, click it once.');
+          const res = await fetch('/extract', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: urls[0]})});
+          const data = await res.json();
+          if (!res.ok) { setStatus('error', data.error || 'Something went wrong.'); }
+          else {
+            if (data.duplicate) setStatus('warn', '⚠️ This listing matches one you already saved — both are kept and flagged below.');
+            else setStatus('hidden', '');
+            urlEl.value = ''; urlEl.style.height = 'auto'; await loadList(data.id);
+          }
+        } else {
+          setStatus('loading', `Processing ${urls.length} listings… one Chrome window will open. This can take a while.`);
+          const res = await fetch('/extract-batch', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({urls})});
+          const data = await res.json();
+          if (!res.ok) { setStatus('error', data.error || 'Batch failed.'); }
+          else {
+            const failed = data.items.filter(i => !i.ok);
+            const dups = data.items.filter(i => i.duplicate);
+            let msg = `✔ ${data.saved} of ${data.total} saved.`;
+            if (dups.length) msg += ` ⚠️ ${dups.length} duplicate(s) flagged.`;
+            if (failed.length) msg += ' Failed: ' + failed.map(f => f.url.split('/').pop()).join(', ');
+            setStatus(failed.length ? 'error' : (dups.length ? 'warn' : 'hint'), msg);
+            urlEl.value = ''; urlEl.style.height = 'auto';
+            await loadList();
+          }
+        }
+      } catch (err) { setStatus('error', 'Request failed: ' + err); }
+      finally { go.disabled = false; }
+    });
+
+    function setStatus(kind, msg) {
+      statusEl.dataset.intro = '';           // any real status replaces the intro
+      statusEl.className = 'status ' + (kind === 'hidden' ? 'hidden' : kind);
+      if (kind !== 'hidden') statusEl.textContent = msg;
+    }
+
+    renderPrefs();
+    loadSearches();
+    loadList();
+  </script>
+</body>
+</html>

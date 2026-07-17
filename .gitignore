@@ -1,0 +1,30 @@
+# --- secrets (never commit) ---
+secrets.json
+.env
+
+# --- your personal data ---
+results.csv
+results.csv.tmp
+saved_searches.json
+
+# --- browser profile (contains cookies / Cloudflare clearance) ---
+.browser_profile/
+
+# --- downloaded/cached public datasets (auto-rebuilt on first run) ---
+mrt_stations.csv
+primary_schools.csv
+preschools.geojson
+malls.csv
+hawker_centres.csv
+chas_clinics.csv
+
+
+# --- python ---
+venv/
+__pycache__/
+*.pyc
+
+# --- os / editor ---
+.DS_Store
+.claude/
+p1_vacancies*.json
