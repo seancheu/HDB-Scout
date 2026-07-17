@@ -373,6 +373,9 @@ body {
   box-shadow: var(--shadow);
 }
 
+/* Shortlist export bar */
+.export-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+
 /* Personalized affordability line */
 .afford-you { margin: 8px 0 0; font-size: 13px; line-height: 1.5; font-weight: 600; }
 

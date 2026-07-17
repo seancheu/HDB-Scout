@@ -95,6 +95,25 @@
 
     <div id="tabs" class="tabs hidden"></div>
 
+    <div id="export-bar" class="export-bar hidden">
+      <button id="export-shortlist" class="ghost accent" type="button">📤 Export shortlist</button>
+      <span class="muted">One click — all links &amp; key details.</span>
+    </div>
+
+    <section id="export-box" class="score-panel hidden">
+      <div class="compare-head">
+        <h3>📤 Share your shortlist</h3>
+        <button id="export-close" class="icon-btn" type="button" title="Close">✕</button>
+      </div>
+      <textarea id="export-msg" class="share-msg" rows="14"></textarea>
+      <div class="share-row">
+        <input id="export-myagent" class="myagent" type="text" placeholder="WhatsApp number (optional) — e.g. +65 9123 4567">
+        <button id="export-copy" class="ghost" type="button">📋 Copy</button>
+        <button id="export-wa" class="ghost share-wa" type="button">🟢 WhatsApp</button>
+      </div>
+      <p id="export-hint" class="muted"></p>
+    </section>
+
     <div id="ovwrap" class="ovwrap hidden">
       <button id="ov-toggle" class="tab" type="button"></button>
       <iframe id="ov-map" class="ov-map hidden" title="Area overview map" loading="lazy"></iframe>
@@ -438,6 +457,65 @@
       </div>`;
     }
 
+    // ---- shortlist export ------------------------------------------------------
+    // One compact block per starred listing: the key numbers + both links.
+    function shortlistMessage(rows) {
+      const L = [`⭐ My shortlist — ${rows.length} HDB listing${rows.length > 1 ? 's' : ''}`, ''];
+      rows.forEach((r, i) => {
+        L.push(`${i + 1}. ${r.block_street || 'Listing'}${r.town ? ` (${r.town})` : ''}`);
+        const money2 = [r.price, r.size_sqft, psfNum(r) && `S$${psfNum(r).toLocaleString()} psf`]
+          .filter(Boolean).join(' · ');
+        if (money2) L.push(`   ${money2}`);
+        const spec = [(r.beds || r.baths) ? `${r.beds || '?'} beds / ${r.baths || '?'} baths` : '',
+                      leaseNum(r) != null ? `${leaseNum(r)} yrs lease` : '',
+                      r.top_year ? `TOP ${r.top_year}` : ''].filter(Boolean).join(' · ');
+        if (spec) L.push(`   ${spec}`);
+        if (r.nearest_mrt || r.mrt_distance)
+          L.push(`   MRT: ${[r.mrt_distance, r.nearest_mrt].filter(Boolean).join(' — ')}`);
+        const flags = (r._flags || []).map(f => f.label.replace(/^\W+\s*/, ''));
+        if (flags.length) L.push(`   ${flags.join(', ')}`);
+        const a = afford(r);
+        if (a) L.push(`   Est: ~${money(a.monthly)}/mo · ~${money(a.upfront)} upfront`);
+        if (r._status) L.push(`   Status: ${(STATUS_LABEL[r._status] || r._status).replace(/^\W+\s*/, '')}`);
+        if (r._note) L.push(`   Notes: ${r._note}`);
+        if (r.listing_url || r.url) L.push(`   ${r.listing_url || r.url}`);
+        L.push('');
+      });
+      L.push('Sent from HDB Scout');
+      return L.join('\n');
+    }
+
+    document.getElementById('export-shortlist').addEventListener('click', async () => {
+      const rows = ROWS.filter(r => r._starred);
+      if (!rows.length) { setStatus('warn', 'Star (★) some listings first.'); return; }
+      const msg = shortlistMessage(rows);
+      const box = document.getElementById('export-box');
+      document.getElementById('export-msg').value = msg;
+      document.getElementById('export-myagent').value =
+        (JSON.parse(localStorage.getItem('myagent') || '{}')).phone || '';
+      document.getElementById('export-hint').textContent = '';
+      box.classList.remove('hidden');
+      box.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+    document.getElementById('export-close').addEventListener('click', () =>
+      document.getElementById('export-box').classList.add('hidden'));
+    document.getElementById('export-copy').addEventListener('click', async () => {
+      const t = document.getElementById('export-msg');
+      const hint = document.getElementById('export-hint');
+      try { await navigator.clipboard.writeText(t.value); hint.textContent = '✓ Copied — paste into any chat or email.'; }
+      catch { t.select(); hint.textContent = 'Press ⌘/Ctrl+C to copy.'; }
+    });
+    document.getElementById('export-wa').addEventListener('click', () => {
+      const num = (document.getElementById('export-myagent').value || '').replace(/[^\d]/g, '');
+      const msg = document.getElementById('export-msg').value;
+      const hint = document.getElementById('export-hint');
+      if (num) localStorage.setItem('myagent', JSON.stringify({phone: document.getElementById('export-myagent').value}));
+      // No number → WhatsApp's share picker; with one → straight to that chat.
+      window.open(num ? `https://wa.me/${num}?text=${encodeURIComponent(msg)}`
+                      : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+      hint.textContent = 'Opening WhatsApp…';
+    });
+
     // ---- share to agent ------------------------------------------------------
     function agentMessage(r) {
       const L = [];
@@ -760,6 +838,10 @@
       tabsEl.classList.toggle('hidden', !worth);
       tabsEl.innerHTML = defs.map(d => `<button class="tab ${TAB === d.key ? 'on' : ''}" data-key="${d.key}">${esc(d.label)}</button>`).join('');
       tabsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { TAB = b.dataset.key; renderList(); }));
+      // The export bar belongs to the shortlist view only.
+      document.getElementById('export-bar').classList.toggle('hidden',
+        !(TAB === 'shortlist' && short > 0));
+      if (TAB !== 'shortlist') document.getElementById('export-box').classList.add('hidden');
     }
 
     // ---- area overview map (blocks only) -------------------------------------
