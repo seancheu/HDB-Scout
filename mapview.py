@@ -498,7 +498,7 @@ def _station_label(s):
 
 
 def _add_property(m, block_street, block_lat, block_lon, stations, schools=None,
-                  malls=None, hawkers=None, extras=None,
+                  malls=None, hawkers=None, extras=None, row_id=None, url=None,
                   block_color="red", station_color=None, school_color="purple",
                   line_color="gray", draw_school_lines=True):
     """Add one property's block + stations + schools (+ malls/hawkers) to map `m`.
@@ -515,7 +515,7 @@ def _add_property(m, block_street, block_lat, block_lon, stations, schools=None,
         folium.Marker(
             [block_lat, block_lon],
             tooltip=f"🏠 {block_street or 'Block'}",
-            popup=block_street or "Block",
+            popup=_listing_popup(block_street, None, row_id, url),
             icon=folium.Icon(color=block_color, icon="home", prefix="fa"),
         ).add_to(m)
         pts.append([block_lat, block_lon])
@@ -561,7 +561,7 @@ def _finish(m, pts):
 
 
 def build_map_html(block_street, block_lat, block_lon, stations, schools=None,
-                   theme="light"):
+                   theme="light", url=None):
     """Standalone map for ONE property (block + nearby MRT/LRT + primary schools)."""
     stations = stations or []
     schools = schools or []
@@ -586,7 +586,7 @@ def build_map_html(block_street, block_lat, block_lon, stations, schools=None,
     m = folium.Map(location=center, zoom_start=16, tiles=_tiles(theme),
                    control_scale=True)
     pts = _add_property(m, block_street, block_lat, block_lon, stations, schools,
-                        malls, hawkers, extras, block_color="red")
+                        malls, hawkers, extras, url=url, block_color="red")
     # Legend so the marker colours are self-explanatory.
     legend = [("🏠 Block", _SWATCH["red"]), ("🚇 MRT", _SWATCH["blue"]),
               ("🚈 LRT", _SWATCH["green"])]
@@ -602,6 +602,32 @@ def build_map_html(block_street, block_lat, block_lon, stations, schools=None,
         legend.append(("🏥 CHAS clinic", _SWATCH["darkblue"]))
     m.get_root().html.add_child(_legend(legend, title="Legend"))
     return _finish(m, pts)
+
+
+def _listing_popup(name, price=None, row_id=None, url=None):
+    """Marker popup with actions: focus the row in the app (via postMessage to
+    the parent page — the map is same-origin) and open the original listing."""
+    import html as _html
+    lines = [f"<b>{_html.escape(name or 'Listing')}</b>"]
+    if price:
+        lines.append(_html.escape(str(price)))
+    links = []
+    if row_id is not None:
+        links.append(
+            f"<a href=\"#\" style=\"color:#ef2d56;font-weight:700;text-decoration:none\" "
+            f"onclick=\"parent.postMessage({{type:'focus-listing',id:{int(row_id)}}},'*');"
+            f"return false;\">Open in app</a>")
+    if url:
+        links.append(
+            f"<a href=\"{_html.escape(str(url), quote=True)}\" target=\"_blank\" "
+            f"rel=\"noopener\" style=\"color:#ef2d56;font-weight:700;"
+            f"text-decoration:none\">View listing ↗</a>")
+    if links:
+        lines.append(" · ".join(links))
+    body = "<br>".join(lines)
+    return folium.Popup(
+        f'<div style="font:13px/1.6 -apple-system,BlinkMacSystemFont,sans-serif;'
+        f'min-width:170px">{body}</div>', max_width=300)
 
 
 def build_overview_map_html(items, theme="light"):
@@ -624,7 +650,9 @@ def build_overview_map_html(items, theme="light"):
         label = " · ".join(x for x in (it.get("block_street"), it.get("price")) if x)
         color = town_color.get(it.get("town"), "red") if multi else "red"
         folium.Marker(
-            [lat, lon], tooltip=label, popup=label,
+            [lat, lon], tooltip=label,
+            popup=_listing_popup(it.get("block_street"), it.get("price"),
+                                 it.get("id"), it.get("url")),
             icon=folium.Icon(color=color, icon="home", prefix="fa"),
         ).add_to(m)
         pts.append([lat, lon])
@@ -678,7 +706,7 @@ def build_compare_map_html(items, theme="light"):
             lat, lon = geocode_address(f"{it['block_street']} Singapore")
         pts = _add_property(
             m, it.get("block_street"), lat, lon, it.get("stations"),
-            it.get("schools"),
+            it.get("schools"), row_id=it.get("id"), url=it.get("url"),
             block_color=color, station_color=color, line_color=color,
             draw_school_lines=False,  # markers only in compare, to reduce clutter
         )

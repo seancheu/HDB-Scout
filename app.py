@@ -622,7 +622,7 @@ def recheck():
     })
 
 
-def _row_map_data(row):
+def _row_map_data(row, row_id=None):
     """Coerce a CSV row into the shape the map builder expects."""
     def _load(key):
         try:
@@ -630,6 +630,8 @@ def _row_map_data(row):
         except Exception:
             return []
     return {
+        "id": row_id,
+        "url": row.get("listing_url") or row.get("url"),
         "block_street": row.get("block_street"),
         "block_lat": float(row["block_lat"]) if row.get("block_lat") else None,
         "block_lon": float(row["block_lon"]) if row.get("block_lon") else None,
@@ -646,9 +648,10 @@ def map_view(row_id):
     if row_id < 0 or row_id >= len(rows):
         return Response("<p style='font-family:sans-serif'>Map not found.</p>",
                         mimetype="text/html", status=404)
-    d = _row_map_data(rows[row_id])
+    d = _row_map_data(rows[row_id], row_id)
     html = build_map_html(d["block_street"], d["block_lat"], d["block_lon"],
-                          d["stations"], d["schools"], theme=theme)
+                          d["stations"], d["schools"], theme=theme,
+                          url=d["url"])
     return Response(html, mimetype="text/html")
 
 
@@ -663,6 +666,8 @@ def map_overview():
         if 0 <= i < len(rows) and rows[i].get("block_lat"):
             r = rows[i]
             items.append({
+                "id": i,
+                "url": r.get("listing_url") or r.get("url"),
                 "block_street": r.get("block_street"),
                 "price": r.get("price"),
                 "town": r.get("town"),
@@ -681,7 +686,7 @@ def map_compare():
     theme = request.args.get("theme", "light")
     ids = [int(x) for x in request.args.get("ids", "").split(",") if x.strip().isdigit()]
     rows = _csv_rows()
-    items = [_row_map_data(rows[i]) for i in ids if 0 <= i < len(rows)]
+    items = [_row_map_data(rows[i], i) for i in ids if 0 <= i < len(rows)]
     if not items:
         return Response("<p style='font-family:sans-serif'>Nothing to compare.</p>",
                         mimetype="text/html", status=404)

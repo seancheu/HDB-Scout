@@ -783,6 +783,26 @@
       localStorage.setItem('ovmap', OV ? '1' : '');
       renderList();
     });
+    // Map pins post back their row id ("Open in app") — jump to that listing.
+    function focusListing(id) {
+      let item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${id}"]`));
+      if (!item) {                       // hidden by the active tab/filter — widen it
+        TAB = 'all';
+        document.getElementById('filter').value = '';
+        renderList();
+        item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${id}"]`));
+      }
+      if (!item) return;
+      item.scrollIntoView({behavior: 'smooth', block: 'center'});
+      if (!item.classList.contains('open')) item.querySelector('.chev').click();
+      item.classList.add('flash');
+      setTimeout(() => item.classList.remove('flash'), 1400);
+    }
+    window.addEventListener('message', (e) => {
+      const d = e.data || {};
+      if (d && d.type === 'focus-listing' && d.id != null) focusListing(Number(d.id));
+    });
+
     // Leaflet mis-sizes when its iframe is resized after load — reload maps
     // once the resize settles.
     window.addEventListener('resize', debounce(() => {

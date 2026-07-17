@@ -192,6 +192,12 @@ body {
 }
 .item:hover { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
 .item.open { transform: none; }
+/* Brief highlight when jumped to from a map pin. */
+.item.flash { animation: flash 1.4s ease-out; }
+@keyframes flash {
+  0%, 40% { box-shadow: var(--shadow-lift), 0 0 0 3px var(--brand); }
+  100%    { box-shadow: var(--shadow), 0 0 0 0 transparent; }
+}
 .item-head {
   display: grid;
   grid-template-columns: 26px 1.6fr 1fr .8fr 1.7fr .5fr .65fr .7fr 30px 30px 30px;
