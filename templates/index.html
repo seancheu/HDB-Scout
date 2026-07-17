@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HDB Scout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -141,6 +144,11 @@
       document.querySelectorAll('iframe[data-src]').forEach(f => {
         if (f.src) f.src = f.dataset.src + (f.dataset.src.includes('?') ? '&' : '?') + 'theme=' + t;
       });
+      const ov = document.getElementById('ov-map');
+      if (ov && ov.src) {
+        ov.dataset.cur = '';
+        if (typeof renderList === 'function' && typeof ROWS !== 'undefined' && ROWS.length) renderList();
+      }
     }
     function theme() { return root.getAttribute('data-theme') || 'light'; }
     applyTheme(localStorage.getItem('theme') || 'light');
@@ -775,6 +783,13 @@
       localStorage.setItem('ovmap', OV ? '1' : '');
       renderList();
     });
+    // Leaflet mis-sizes when its iframe is resized after load — reload maps
+    // once the resize settles.
+    window.addEventListener('resize', debounce(() => {
+      document.querySelectorAll('#ov-map, .rowmap, #compare-map').forEach(f => {
+        if (f.src && !f.classList.contains('hidden')) f.src = f.src;
+      });
+    }, 400));
 
     function renderList() {
       computeScores();
