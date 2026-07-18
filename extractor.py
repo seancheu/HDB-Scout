@@ -634,9 +634,25 @@ def _light_from_card(ld):
     return out
 
 
+# Paid-placement flags in a card's `products` object. Any of these true means
+# the card is an ad slot (Turbo/Spotlight/Featured…), not an organic result.
+_PROMO_FLAGS = (
+    "isRankedSpotlight", "isBoosted", "isFeaturedListing", "isGalleryFeatured",
+    "isMainFeatured", "isPremium", "isPremiumPlus", "isPremiumProjectListing",
+    "isPromotedListing", "isShowcase", "isSpotlight", "isTurbo", "isTurboPro",
+    "isSuperBoost", "isBoost",
+)
+
+
+def _is_promoted(ld):
+    products = ld.get("products") or {}
+    return isinstance(products, dict) and any(products.get(f) for f in _PROMO_FLAGS)
+
+
 def parse_search(html):
     """Parse a PropertyGuru search-results page into a list of light result
-    dicts (one per listing card), using the embedded __NEXT_DATA__."""
+    dicts (one per listing card), using the embedded __NEXT_DATA__.
+    Promoted (paid-placement) cards carry `_promoted: True`."""
     soup = BeautifulSoup(html, "html.parser")
     nxt = _next_data(soup)
     cards = _dig(nxt, "props", "pageProps", "pageData", "data", "listingsData") or []
@@ -644,7 +660,10 @@ def parse_search(html):
     for c in cards:
         ld = c.get("listingData") if isinstance(c, dict) else None
         if isinstance(ld, dict) and ld.get("url"):
-            out.append(_light_from_card(ld))
+            r = _light_from_card(ld)
+            if _is_promoted(ld):
+                r["_promoted"] = True
+            out.append(r)
     return out
 
 
@@ -680,12 +699,13 @@ def extract_search_all(url, max_pages=20, headless=False, on_page=None):
     """Walk every page of a search (up to max_pages), reusing ONE browser, and
     return all unique light listings.
 
-    Returns {"listings", "total_pages", "fetched_pages", "capped"}.
+    Returns {"listings", "total_pages", "fetched_pages", "capped", "promoted"}.
+    Promoted (paid-placement) cards are dropped; `promoted` counts them.
     `on_page(page, pages_to_fetch, count_so_far)` fires after each page.
     """
     from playwright.sync_api import sync_playwright
 
-    listings, seen, total_pages = [], set(), 1
+    listings, seen, total_pages, promoted = [], set(), 1, 0
     with _BROWSER_LOCK, sync_playwright() as p:
         browser, context = _new_browser(p, headless)
         try:
@@ -696,6 +716,9 @@ def extract_search_all(url, max_pages=20, headless=False, on_page=None):
                 if page_n == 1:
                     total_pages = _search_total_pages(html)
                 for r in parse_search(html):
+                    if r.pop("_promoted", False):
+                        promoted += 1
+                        continue
                     key = _listing_key(r.get("listing_url"))
                     if key in seen:
                         continue
@@ -714,6 +737,7 @@ def extract_search_all(url, max_pages=20, headless=False, on_page=None):
         "total_pages": total_pages,
         "fetched_pages": min(total_pages, max_pages),
         "capped": total_pages > max_pages,
+        "promoted": promoted,
     }
 
 

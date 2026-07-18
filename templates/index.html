@@ -29,7 +29,7 @@
     <div class="toolbar" id="toolbar">
       <span id="count" class="count" title="Saved listings">🏠 0</span>
       <input id="filter" class="filter" type="search" placeholder="Filter by block or MRT…">
-      <select id="sort" class="sort">
+      <select id="sort" class="sort hidden">
         <option value="newest">Newest first</option>
         <option value="score_desc">Best match first</option>
         <option value="price_asc">Price: low → high</option>
@@ -41,6 +41,7 @@
         <option value="lease_asc">Lease: shortest first</option>
         <option value="mrt_asc">MRT: nearest first</option>
       </select>
+      <button id="sort-toggle" class="ghost" type="button">⇅ <span id="sort-cur">Newest first</span></button>
       <button id="setup-toggle" class="ghost" type="button">⚙️ Set up</button>
       <span class="spacer"></span>
       <button id="deepen-all" class="ghost accent hidden" type="button">⬇ Load details</button>
@@ -54,6 +55,13 @@
         </div>
       </div>
     </div>
+
+    <div id="sort-backdrop" class="sheet-backdrop hidden"></div>
+    <section id="sort-panel" class="sheet hidden">
+      <p class="sheet-h">Sort</p>
+      <div id="sort-chips" class="chip-grid"></div>
+      <button id="sort-apply" class="apply-btn" type="button">Apply <span class="apply-arrow">→</span></button>
+    </section>
 
     <section id="setup-panel" class="score-panel hidden">
       <div class="setup-grid">
@@ -140,6 +148,7 @@
       <span></span>
     </div>
     <div id="list" class="list"></div>
+    <div id="pager" class="pager hidden"></div>
     <p id="empty" class="empty">No saved properties yet.</p>
 
     <section id="comparewrap" class="comparewrap hidden">
@@ -170,7 +179,7 @@
       }
     }
     function theme() { return root.getAttribute('data-theme') || 'light'; }
-    applyTheme(localStorage.getItem('theme') || 'light');
+    applyTheme(localStorage.getItem('theme') || 'dark');
     document.getElementById('theme').addEventListener('click', () =>
       applyTheme(theme() === 'dark' ? 'light' : 'dark'));
 
@@ -336,16 +345,32 @@
         const rk = n => money(Math.round(n / 1000) * 1000);   // avoid false precision
         let verdict;
         if (d.cov == null) verdict = '';
-        else if (d.cov > 5000) verdict = `<p class="cov-verdict warn-t">≈ <b>${rk(d.cov)} cash over</b> the adjusted market value — likely COV territory.</p>`;
-        else if (d.cov < -5000) verdict = `<p class="cov-verdict good-t">Asking is <b>${rk(-d.cov)} below</b> the adjusted market value — low COV risk.</p>`;
-        else verdict = '<p class="cov-verdict good-t">Asking is in line with the adjusted market value — COV likely minimal.</p>';
+        else if (d.cov > 5000) verdict = `<p class="cov-verdict warn-t">≈ <b>${rk(d.cov)} cash over</b> the estimated valuation — likely COV territory.</p>`;
+        else if (d.cov < -5000) verdict = `<p class="cov-verdict good-t">Asking is <b>${rk(-d.cov)} below</b> the estimated valuation — low COV risk.</p>`;
+        else verdict = '<p class="cov-verdict good-t">Asking is in line with the estimated valuation — COV likely minimal.</p>';
+        // Likely COV range from the p25–p75 valuation band.
+        let range = '';
+        if (d.cov_low != null && d.cov_high != null && d.band_low !== d.band_high) {
+          const f = v => v <= 0 ? 'S$0' : rk(v);
+          range = `<p class="cov-line">Likely valuation band <b>${money(d.band_low)}–${money(d.band_high)}</b>` +
+                  (d.cov != null ? ` → cash over roughly <b>${f(d.cov_low)}–${f(d.cov_high)}</b>` : '') + `</p>`;
+        }
+        // Valuations are comp-driven: reno premiums show up as COV, and in a
+        // fast-rising street the official valuation lags the market.
+        const notes = [];
+        if ((r._flags || []).some(fl => /renovated/i.test(fl.label)))
+          notes.push('⚠ Renovated unit: HDB valuation largely ignores renovation, so the reno premium usually becomes cash over.');
+        if ((d.drift_pct_mo || 0) >= 0.3)
+          notes.push(`⚠ Prices here are rising ~${(d.drift_pct_mo * 12).toFixed(0)}%/yr — official valuations lag a hot market, so budget extra cash.`);
         box.innerHTML = `<span class="label">💵 Potential COV (est.)</span>
           ${verdict}
-          <p class="cov-line">Based on <b>${d.count}</b> similar transactions ${scopeTxt} (last ${d.months} mo): adjusted median <b>${money(d.median)}</b> · range ${money(d.low)}–${money(d.high)}</p>
+          ${range}
+          <p class="cov-line">Based on <b>${d.count}</b> similar transactions ${scopeTxt} (last ${d.months} mo): est. valuation <b>${money(d.median)}</b> · full range ${money(d.low)}–${money(d.high)}</p>
+          ${notes.map(n => `<p class="cov-line warn-t">${n}</p>`).join('')}
           ${(d.adjustments || []).length ? `<p class="cov-line muted">Refinements: ${d.adjustments.map(esc).join(' · ')}</p>` : ''}
           ${trendLine(d)}
           <ul class="cov-comps">${d.latest.map(c => `<li>${esc(c.month)} · Blk ${esc(c.block)} · storey ${esc(c.storey)} · ${Math.round(c.sqm * 10.7639).toLocaleString()} sqft · <b>${money(c.price)}</b></li>`).join('')}</ul>
-          <p class="cov-note muted">From official HDB resale data. Actual valuation is set by HDB after OTP — COV is payable in cash only.</p>`;
+          <p class="cov-note muted">Valuer-style estimate from official HDB resale data (comps adjusted for market trend, storey and remaining lease — Bala's curve). Actual valuation is set by HDB after OTP — COV is payable in cash only.</p>`;
       } catch (err) { line.textContent = 'Could not load transaction data: ' + err; }
     }
 
@@ -361,9 +386,17 @@
         P1_CACHE[r._id] = d;
         if (d.error) { line.textContent = d.error; return; }
         if (!d.schools || !d.schools.length) { line.textContent = d.note || 'No school data.'; return; }
+        // Deep-link to the school's own card on MOE's balloting page
+        // (slug: lowercase, punctuation dropped, spaces → hyphens).
+        const moeLink = name => {
+          const slug = (name || '').toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
+          return `https://www.moe.gov.sg/primary/p1-registration/past-vacancies-and-balloting-data?schoolname=${slug}#moe-vacancies-ballot-app`;
+        };
+        const moeA = (name, label) =>
+          `<a class="p1-moe" href="${esc(moeLink(name))}" target="_blank" rel="noopener" title="Official MOE vacancies & balloting data for ${esc(name)}">${label}</a>`;
         const rows = d.schools.map(s => {
           if (s.unmatched)
-            return `<li><b>${esc(s.name)}</b> <span class="kd-d">(${km(s.distance_m)})</span> — no MOE data</li>`;
+            return `<li><b>${esc(s.name)}</b> <span class="kd-d">(${km(s.distance_m)})</span> — no MOE data · ${moeA(s.name, 'check MOE ↗')}</li>`;
           const dist = `<span class="kd-d">(${km(s.distance_m)}${s.within_1km ? ', within 1 km ✓' : ''})</span>`;
           const p1 = s.p1_all_offered ? 'all eligible offered'
                    : (s.p1_vacancies != null ? `${s.p1_vacancies} vacancies` : '—');
@@ -404,7 +437,7 @@
             <b>${esc(s.name)}</b> ${dist}
             <span class="flag ${tone} p1-verdict">${esc(s.verdict)}</span>
             <div class="p1-detail">Phase 1: ${esc(p1)} · Phase 2C: ${esc(p2c)}${
-              s.p2c_balloted && s.p2c_ballot_applicants ? ` · ballot: ${s.p2c_ballot_applicants} for ${s.p2c_ballot_vacancies} places` : ''}</div>
+              s.p2c_balloted && s.p2c_ballot_applicants ? ` · ballot: ${s.p2c_ballot_applicants} for ${s.p2c_ballot_vacancies} places` : ''} · ${moeA(s.name, 'full results ↗')}</div>
             ${odds}
           </li>`;
         }).join('');
@@ -681,13 +714,7 @@
           <p class="tp-why">${reasonsFor(r, scored).map(esc).join(' · ') || 'strong overall fit'}</p>
         </div>`).join('');
       document.querySelectorAll('.tp-card').forEach(card => {
-        card.addEventListener('click', () => {
-          const item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${card.dataset.id}"]`));
-          if (item) {
-            item.scrollIntoView({behavior: 'smooth', block: 'center'});
-            if (!item.classList.contains('open')) item.querySelector('.chev').click();
-          }
-        });
+        card.addEventListener('click', () => focusListing(Number(card.dataset.id)));
       });
     }
 
@@ -719,10 +746,37 @@
       const el = document.getElementById('searches-list');
       el.innerHTML = d.searches.length ? d.searches.map(s => `
         <div class="search-row" data-id="${s.id}">
-          <span class="search-name" title="${esc(s.url)}">${esc(s.name)}</span>
+          <span class="search-name" title="${esc(s.url)} — double-click to rename">${esc(s.name)}</span>
+          <button class="ghost s-edit" data-id="${s.id}" title="Rename">✏️</button>
           <button class="ghost s-refresh" data-id="${s.id}" title="Pull latest listings">🔄 Refresh</button>
           <button class="ghost s-del" data-id="${s.id}" title="Remove">✕</button>
         </div>`).join('') : '<p class="muted">No saved searches yet.</p>';
+      // Inline rename: ✏️ (or double-click the name) swaps in an input.
+      // Enter/blur saves; Esc cancels; an empty name restores the auto label.
+      function startRename(row) {
+        const span = row.querySelector('.search-name');
+        if (!span) return;                       // already editing
+        const inp = document.createElement('input');
+        inp.className = 'search-rename';
+        inp.value = span.textContent;
+        inp.placeholder = 'Custom name (leave empty for auto)';
+        span.replaceWith(inp);
+        inp.focus(); inp.select();
+        let done = false;
+        const finish = async (save) => {
+          if (done) return; done = true;
+          if (save) await fetch('/searches/rename', {method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: row.dataset.id, name: inp.value.trim()})});
+          loadSearches();
+        };
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Enter') finish(true);
+          else if (e.key === 'Escape') finish(false);
+        });
+        inp.addEventListener('blur', () => finish(true));
+      }
+      el.querySelectorAll('.s-edit').forEach(b => b.addEventListener('click', () => startRename(b.closest('.search-row'))));
+      el.querySelectorAll('.search-name').forEach(s => s.addEventListener('dblclick', () => startRename(s.closest('.search-row'))));
       el.querySelectorAll('.s-refresh').forEach(b => b.addEventListener('click', () => refreshSearch(b.dataset.id)));
       el.querySelectorAll('.s-del').forEach(b => b.addEventListener('click', async () => {
         await fetch('/searches/delete', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: b.dataset.id})});
@@ -736,7 +790,7 @@
         const res = await fetch('/searches/refresh', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
         const d = await res.json();
         if (!res.ok) { msg.textContent = d.error || 'Refresh failed.'; return; }
-        msg.textContent = `✔ ${d.imported} new listing(s)${d.removed ? `, ${d.removed} duplicate(s) removed` : ''}.`;
+        msg.textContent = `✔ ${d.imported} new listing(s)${d.removed ? `, ${d.removed} duplicate(s) removed` : ''}${d.promoted ? `, ${d.promoted} promoted ad(s) skipped` : ''}.`;
         await loadList();
         if (ROWS.some(r => !r._deep)) runDeepenAll();
       } catch (err) { msg.textContent = 'Failed: ' + err; }
@@ -837,7 +891,7 @@
       const tabsEl = document.getElementById('tabs');
       tabsEl.classList.toggle('hidden', !worth);
       tabsEl.innerHTML = defs.map(d => `<button class="tab ${TAB === d.key ? 'on' : ''}" data-key="${d.key}">${esc(d.label)}</button>`).join('');
-      tabsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { TAB = b.dataset.key; renderList(); }));
+      tabsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { TAB = b.dataset.key; PAGE = 1; renderList(); }));
       // The export bar belongs to the shortlist view only.
       document.getElementById('export-bar').classList.toggle('hidden',
         !(TAB === 'shortlist' && short > 0));
@@ -868,9 +922,15 @@
     // Map pins post back their row id ("Open in app") — jump to that listing.
     function focusListing(id) {
       let item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${id}"]`));
+      if (!item) {                       // on another page — jump to it
+        gotoRowPage(id);
+        renderList();
+        item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${id}"]`));
+      }
       if (!item) {                       // hidden by the active tab/filter — widen it
         TAB = 'all';
         document.getElementById('filter').value = '';
+        gotoRowPage(id);
         renderList();
         item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${id}"]`));
       }
@@ -893,17 +953,56 @@
       });
     }, 400));
 
+    // ---- pagination ----------------------------------------------------------
+    const PAGE_SIZE = 10;
+    let PAGE = 1;
+    // Jump PAGE to wherever this listing sits in the current view.
+    function gotoRowPage(id) {
+      const idx = currentView().findIndex(r => r._id === Number(id));
+      if (idx >= 0) PAGE = Math.floor(idx / PAGE_SIZE) + 1;
+    }
+    function renderPager(total) {
+      const el = document.getElementById('pager');
+      const pages = Math.ceil(total / PAGE_SIZE);
+      el.classList.toggle('hidden', pages <= 1);
+      if (pages <= 1) return;
+      const btn = (n, label, cls = '', dis = false) =>
+        `<button class="page-btn ${cls}" data-p="${n}" ${dis ? 'disabled' : ''} type="button">${label}</button>`;
+      // 1 … around current … last
+      const show = new Set([1, 2, PAGE - 1, PAGE, PAGE + 1, pages - 1, pages]);
+      const parts = [];
+      let last = 0;
+      for (let n = 1; n <= pages; n++) {
+        if (!show.has(n)) continue;
+        if (n - last > 1) parts.push('<span class="page-gap">…</span>');
+        parts.push(btn(n, n, PAGE === n ? 'on' : ''));
+        last = n;
+      }
+      const from = (PAGE - 1) * PAGE_SIZE + 1, to = Math.min(PAGE * PAGE_SIZE, total);
+      el.innerHTML = btn(PAGE - 1, '‹', '', PAGE === 1) + parts.join('') + btn(PAGE + 1, '›', '', PAGE === pages)
+        + `<span class="page-info">${from}–${to} of ${total}</span>`;
+      el.querySelectorAll('.page-btn').forEach(b => b.addEventListener('click', () => {
+        PAGE = +b.dataset.p;
+        renderList();
+        listEl.scrollIntoView({behavior: 'smooth', block: 'start'});
+      }));
+    }
+
     function renderList() {
       computeScores();
       // Reset to All if the active town tab no longer exists.
       if (TAB.startsWith('town:') && !townsPresent().includes(TAB.slice(5))) TAB = 'all';
       if (TAB === 'shortlist' && !ROWS.some(r => r._starred)) TAB = 'all';
       renderTabs();
-      const rows = currentView();
-      updateOverview(rows);
+      const allRows = currentView();
+      updateOverview(allRows);
       document.getElementById('count').textContent =
-        rows.length === ROWS.length ? `🏠 ${ROWS.length}` : `🏠 ${rows.length} / ${ROWS.length}`;
-      renderTopPicks(rows);
+        allRows.length === ROWS.length ? `🏠 ${ROWS.length}` : `🏠 ${allRows.length} / ${ROWS.length}`;
+      renderTopPicks(allRows);
+      const pages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+      if (PAGE > pages) PAGE = pages;
+      const rows = allRows.slice((PAGE - 1) * PAGE_SIZE, PAGE * PAGE_SIZE);
+      renderPager(allRows.length);
       listEl.innerHTML = '';
       emptyEl.style.display = rows.length ? 'none' : 'block';
       document.getElementById('list-head').style.display = rows.length ? 'grid' : 'none';
@@ -930,7 +1029,7 @@
           <div class="item-head">
             <input type="checkbox" class="pick" data-id="${r._id}" ${selected.has(r._id) ? 'checked' : ''} title="Select to compare">
             <div class="col title">
-              ${r.thumbnail ? `<img class="thumb" src="${esc(r.thumbnail)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<span class="thumb ph">🏠</span>'}
+              ${r.thumbnail ? `<img class="thumb" src="${esc(r.thumbnail)}" data-full="${esc((_json(r.images_json)[0] || {}).url || r.thumbnail)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<span class="thumb ph">🏠</span>'}
               <div class="title-inner">
                 <span class="title-line">
                   <button class="star ${r._starred ? 'on' : ''}" title="Shortlist">${r._starred ? '★' : '☆'}</button>
@@ -955,6 +1054,14 @@
             <button class="chev" title="Details">▾</button>
             <button class="del" data-id="${r._id}" title="Remove">✕</button>
           </div>
+          ${(() => {
+            // Always-visible photo strip: first 4 gallery shots (or just the
+            // thumbnail until full details are loaded).
+            const g = _json(r.images_json).slice(0, 4);
+            const imgs = g.length ? g.map(i => i.url) : (r.thumbnail ? [r.thumbnail] : []);
+            return imgs.length ? `<div class="strip">${imgs.map(u =>
+              `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" loading="lazy" alt=""></a>`).join('')}</div>` : '';
+          })()}
           <div class="item-body">
             <div class="track">
               <label class="track-status">Status
@@ -1121,6 +1228,37 @@
       }
     }
 
+    // ---- hero image hover preview (desktop) ----------------------------------
+    // Hovering any listing thumb floats a large copy of the hero shot by the
+    // cursor. Uses the first gallery photo (full-size) when details are loaded.
+    const peek = document.createElement('img');
+    peek.id = 'heropeek';
+    peek.className = 'hidden';
+    document.body.appendChild(peek);
+    const canPeek = () => window.matchMedia('(hover: hover)').matches && window.innerWidth > 640;
+    const peekTarget = el => el.closest?.('.thumb[src], .tp-top img');
+    function placePeek(e) {
+      const w = peek.offsetWidth || 380, h = peek.offsetHeight || 280;
+      let x = e.clientX + 20, y = e.clientY + 20;
+      if (x + w > window.innerWidth - 10) x = e.clientX - w - 20;
+      if (y + h > window.innerHeight - 10) y = Math.max(10, window.innerHeight - h - 10);
+      peek.style.left = x + 'px';
+      peek.style.top = y + 'px';
+    }
+    document.addEventListener('mouseover', e => {
+      const t = peekTarget(e.target);
+      if (!t || !canPeek()) return;
+      peek.src = t.dataset.full || t.src;
+      peek.classList.remove('hidden');
+      placePeek(e);
+    });
+    document.addEventListener('mousemove', e => {
+      if (!peek.classList.contains('hidden')) placePeek(e);
+    });
+    document.addEventListener('mouseout', e => {
+      if (peekTarget(e.target)) { peek.classList.add('hidden'); peek.removeAttribute('src'); }
+    });
+
     async function patchRow(id, fields) {
       await fetch('/update', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, ...fields})});
     }
@@ -1213,6 +1351,8 @@
       updateCompareBtn();
       updateDeepenBtn();
       if (openId != null) {
+        gotoRowPage(openId);
+        renderList();
         const item = [...listEl.children].find(el => el.querySelector(`.del[data-id="${openId}"]`));
         if (item) {
           item.classList.add('open');
@@ -1225,8 +1365,34 @@
       }
     }
 
-    document.getElementById('filter').addEventListener('input', renderListSoon);
-    document.getElementById('sort').addEventListener('change', renderList);
+    document.getElementById('filter').addEventListener('input', () => { PAGE = 1; renderListSoon(); });
+    document.getElementById('sort').addEventListener('change', () => { PAGE = 1; renderList(); });
+
+    // ---- sort chips (chip-based sort panel; bottom sheet on mobile) ----------
+    const sortSel = document.getElementById('sort');
+    const sortPanel = document.getElementById('sort-panel');
+    const sortBackdrop = document.getElementById('sort-backdrop');
+    const sortToggle = document.getElementById('sort-toggle');
+    function renderSortChips() {
+      document.getElementById('sort-chips').innerHTML = [...sortSel.options].map(o =>
+        `<button class="sort-chip ${o.value === sortSel.value ? 'on' : ''}" data-v="${o.value}" type="button">${esc(o.textContent)}</button>`).join('');
+      document.getElementById('sort-cur').textContent = sortSel.selectedOptions[0].textContent;
+      document.querySelectorAll('#sort-chips .sort-chip').forEach(b => b.addEventListener('click', () => {
+        sortSel.value = b.dataset.v;
+        sortSel.dispatchEvent(new Event('change'));
+        renderSortChips();
+      }));
+    }
+    function toggleSortPanel(open) {
+      const show = open ?? sortPanel.classList.contains('hidden');
+      sortPanel.classList.toggle('hidden', !show);
+      sortBackdrop.classList.toggle('hidden', !show);
+      sortToggle.classList.toggle('active', show);
+    }
+    sortToggle.addEventListener('click', () => toggleSortPanel());
+    document.getElementById('sort-apply').addEventListener('click', () => toggleSortPanel(false));
+    sortBackdrop.addEventListener('click', () => toggleSortPanel(false));
+    renderSortChips();
     document.getElementById('delete-all').addEventListener('click', async () => {
       if (!ROWS.length) return;
       if (!confirm(`Delete all ${ROWS.length} saved listing(s)? This cannot be undone.`)) return;
@@ -1288,17 +1454,17 @@
         // Bulk-import any search-results URLs first (one quiet fetch each).
         if (searches.length) {
           setStatus('loading', `Importing all listings from the search (walking every page)… a Chrome window will open. This can take a minute or two. If a verification checkbox appears in that window, click it once.`);
-          let imported = 0, skipped = 0, capped = false, totalPages = 0, err = '';
+          let imported = 0, skipped = 0, promoted = 0, capped = false, totalPages = 0, err = '';
           for (const su of searches) {
             const res = await fetch('/import', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url: su})});
             const d = await res.json();
             if (!res.ok) { err = d.error || 'Import failed.'; break; }
-            imported += d.imported; skipped += d.skipped;
+            imported += d.imported; skipped += d.skipped; promoted += (d.promoted || 0);
             if (d.capped) { capped = true; totalPages = Math.max(totalPages, d.total_pages); }
           }
           if (err) setStatus('error', err);
           else {
-            let msg = `✔ Imported ${imported} listing(s)${skipped ? `, skipped ${skipped} already saved` : ''}.`;
+            let msg = `✔ Imported ${imported} listing(s)${skipped ? `, skipped ${skipped} already saved` : ''}${promoted ? `, ${promoted} promoted ad(s) skipped` : ''}.`;
             if (capped) msg += ` This search has ${totalPages} pages — I imported the first ${20}. Add more filters on PropertyGuru (price, size, room type) to narrow it.`;
             setStatus(capped ? 'warn' : 'hint', msg);
           }

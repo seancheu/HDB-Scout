@@ -309,7 +309,7 @@ def _import_search(url, max_pages):
     return {
         "imported": imported, "skipped": skipped, "found": len(r["listings"]),
         "total_pages": r["total_pages"], "fetched_pages": r["fetched_pages"],
-        "capped": r["capped"],
+        "capped": r["capped"], "promoted": r.get("promoted", 0),
     }
 
 
@@ -410,6 +410,21 @@ def searches_add():
         items.append({"id": sid, "name": _search_name(url), "url": url})
         _save_searches(items)
     return jsonify({"id": sid, "searches": items})
+
+
+@app.route("/searches/rename", methods=["POST"])
+def searches_rename():
+    d = request.json or {}
+    sid = d.get("id")
+    name = (d.get("name") or "").strip()
+    items = _load_searches()
+    hit = next((s for s in items if s["id"] == sid), None)
+    if not hit:
+        return jsonify({"error": "Search not found."}), 404
+    # Blank name restores the auto-generated label from the URL's filters.
+    hit["name"] = name or _search_name(hit["url"])
+    _save_searches(items)
+    return jsonify({"searches": items})
 
 
 @app.route("/searches/delete", methods=["POST"])
@@ -734,7 +749,8 @@ def cov_estimate(row_id):
         return jsonify({"error": "Row not found."}), 404
     r = rows[row_id]
     est = cov_mod.estimate(r.get("block_street"), r.get("size_sqft"),
-                           r.get("price"), about=r.get("about"))
+                           r.get("price"), about=r.get("about"),
+                           top_year=r.get("top_year"))
     if est is None:
         return jsonify({"error": "Transaction data unavailable right now."}), 502
     return jsonify(est)
