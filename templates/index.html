@@ -16,7 +16,7 @@
       <textarea id="url" rows="1" placeholder="Paste a listing URL, or a PropertyGuru search-results URL to import many at once…" autocomplete="off"></textarea>
       <button id="go" type="submit">Extract</button>
     </form>
-    <button id="theme" class="icon-btn" type="button" title="Toggle theme">🌙</button>
+    <button id="theme" class="icon-btn" type="button" title="Toggle theme" aria-label="Toggle light/dark theme">🌙</button>
   </header>
 
   <main class="display">
@@ -47,7 +47,7 @@
       <button id="deepen-all" class="ghost accent hidden" type="button">⬇ Load details</button>
       <button id="compare" class="ghost" type="button" disabled>Compare (0)</button>
       <div class="menu-wrap">
-        <button id="more-btn" class="ghost" type="button" title="More">⋯</button>
+        <button id="more-btn" class="ghost" type="button" title="More" aria-label="More actions">⋯</button>
         <div id="more-menu" class="menu hidden">
           <button id="recheck-starred" type="button">🔄 Re-check ★ prices</button>
           <a id="download" href="/download" download>⬇ Download CSV</a>
@@ -192,6 +192,8 @@
     const selected = new Set();
 
     const esc = s => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    // Corrupt localStorage must never take down the whole app.
+    const lsJSON = (k, fb = {}) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fb; } catch { return fb; } };
     const debounce = (fn, ms = 200) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
     const renderListSoon = debounce(() => renderList(), 200);
     const numOf = s => { const m = (s || '').replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; };
@@ -256,7 +258,7 @@
     const moneyK = n => 'S$' + Math.round(n / 1000) + 'k';
 
     // ---- your financials -----------------------------------------------------
-    let FIN = JSON.parse(localStorage.getItem('fin') || '{}');
+    let FIN = lsJSON('fin');
     const finActive = () => ['cash', 'cpf', 'monthly'].some(k => Number(FIN[k]) > 0);
     function afford(r) {
       const a = affordability(r);
@@ -525,7 +527,7 @@
       const box = document.getElementById('export-box');
       document.getElementById('export-msg').value = msg;
       document.getElementById('export-myagent').value =
-        (JSON.parse(localStorage.getItem('myagent') || '{}')).phone || '';
+        lsJSON('myagent').phone || '';
       document.getElementById('export-hint').textContent = '';
       box.classList.remove('hidden');
       box.scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -1005,6 +1007,10 @@
       renderPager(allRows.length);
       listEl.innerHTML = '';
       emptyEl.style.display = rows.length ? 'none' : 'block';
+      // Distinguish "nothing saved yet" from "your filter matched nothing".
+      if (!rows.length) emptyEl.textContent = ROWS.length
+        ? 'No listings match — try clearing the filter or switching tabs.'
+        : 'No saved properties yet.';
       document.getElementById('list-head').style.display = rows.length ? 'grid' : 'none';
       for (const r of rows) {
         const item = document.createElement('div');
@@ -1027,12 +1033,12 @@
         if (r._status) chips.unshift({label: STATUS_LABEL[r._status] || r._status, tone: 'status ' + r._status});
         item.innerHTML = `
           <div class="item-head">
-            <input type="checkbox" class="pick" data-id="${r._id}" ${selected.has(r._id) ? 'checked' : ''} title="Select to compare">
+            <input type="checkbox" class="pick" data-id="${r._id}" ${selected.has(r._id) ? 'checked' : ''} title="Select to compare" aria-label="Select to compare">
             <div class="col title">
               ${r.thumbnail ? `<img class="thumb" src="${esc(r.thumbnail)}" data-full="${esc((_json(r.images_json)[0] || {}).url || r.thumbnail)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">` : '<span class="thumb ph">🏠</span>'}
               <div class="title-inner">
                 <span class="title-line">
-                  <button class="star ${r._starred ? 'on' : ''}" title="Shortlist">${r._starred ? '★' : '☆'}</button>
+                  <button class="star ${r._starred ? 'on' : ''}" title="Shortlist" aria-label="${r._starred ? 'Remove from shortlist' : 'Add to shortlist'}" aria-pressed="${r._starred ? 'true' : 'false'}">${r._starred ? '★' : '☆'}</button>
                   ${r._score != null ? `<span class="score-pill" style="--s:${r._score}" title="Score ${r._score}">${r._score}</span>` : ''}
                   ${r._dup ? `<span class="warn" title="${esc(r._dup_reason)}">⚠️</span>` : ''}
                   <span class="src ${(r._source || 'PG').toLowerCase()}">${esc(r._source || 'PG')}</span>
@@ -1050,9 +1056,9 @@
               <div class="col lease" data-label="Lease">${leaseText(r)}</div>
               <div class="col listed" data-label="Listed" title="${esc(r.listed_date || '')}">${listedText(r)}</div>
             </div>
-            <button class="reject ${r._status === 'rejected' ? 'on' : ''}" title="${r._status === 'rejected' ? 'Un-reject' : 'Not for me'}">👎</button>
-            <button class="chev" title="Details">▾</button>
-            <button class="del" data-id="${r._id}" title="Remove">✕</button>
+            <button class="reject ${r._status === 'rejected' ? 'on' : ''}" title="${r._status === 'rejected' ? 'Un-reject' : 'Not for me'}" aria-label="${r._status === 'rejected' ? 'Un-reject listing' : 'Reject listing'}">👎</button>
+            <button class="chev" title="Details" aria-label="Toggle details">▾</button>
+            <button class="del" data-id="${r._id}" title="Remove" aria-label="Remove listing">✕</button>
           </div>
           ${(() => {
             // Always-visible photo strip: first 4 gallery shots (or just the
@@ -1202,7 +1208,7 @@
           const msgEl = item.querySelector('.share-msg');
           const myInp = item.querySelector('.myagent');
           const hint = item.querySelector('.share-hint');
-          const savedNum = () => (JSON.parse(localStorage.getItem('myagent') || '{}')).phone || '';
+          const savedNum = () => lsJSON('myagent').phone || '';
           [box, msgEl, myInp].forEach(el => el.addEventListener('click', e => e.stopPropagation()));
           shareBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1275,7 +1281,7 @@
     const STATUS_LABEL = {viewing: '👁 Viewing', offered: '📝 Offered', rejected: '✕ Rejected'};
 
     // ---- commute -------------------------------------------------------------
-    let COMMUTE = JSON.parse(localStorage.getItem('commute') || '{}');
+    let COMMUTE = lsJSON('commute');
     function commuteChip(r) {
       // Keyed by listing URL so times survive row deletions/re-imports.
       const t = (COMMUTE.times || {})[r.listing_url || r.url];
@@ -1392,6 +1398,9 @@
     sortToggle.addEventListener('click', () => toggleSortPanel());
     document.getElementById('sort-apply').addEventListener('click', () => toggleSortPanel(false));
     sortBackdrop.addEventListener('click', () => toggleSortPanel(false));
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !sortPanel.classList.contains('hidden')) toggleSortPanel(false);
+    });
     renderSortChips();
     document.getElementById('delete-all').addEventListener('click', async () => {
       if (!ROWS.length) return;
@@ -1434,6 +1443,9 @@
 
     // ---- extraction ----------------------------------------------------------
     const urlEl = document.getElementById('url');
+    // The full placeholder wraps and clips on a phone-width topbar.
+    if (window.matchMedia('(max-width: 640px)').matches)
+      urlEl.placeholder = 'Paste a listing URL…';
     urlEl.addEventListener('input', () => { urlEl.style.height = 'auto'; urlEl.style.height = Math.min(urlEl.scrollHeight, 160) + 'px'; });
     urlEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('form').requestSubmit(); } });
     document.getElementById('example').addEventListener('click', () => {
