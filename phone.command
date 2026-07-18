@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Double-click this to run HDB Scout and expose it to your phone
 # (even on mobile data, if 'cloudflared' is installed) — see phone.py.
+# The public trycloudflare link opens in Google Chrome automatically.
 #
 # Leave the window open while you use the app. Close it (or Ctrl+C) to stop.
 

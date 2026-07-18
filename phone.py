@@ -13,10 +13,12 @@ Ctrl+C stops both the app and the tunnel.
 
 import http.client
 import os
+import re
 import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -69,6 +71,45 @@ def _free_port():
     time.sleep(0.5)
 
 
+def _open_in_browser(url):
+    """Open the public link, preferring Google Chrome when installed."""
+    try:
+        if sys.platform == "darwin":
+            if subprocess.run(["open", "-a", "Google Chrome", url],
+                              capture_output=True).returncode == 0:
+                return
+        elif sys.platform == "win32":
+            if subprocess.run(["cmd", "/c", "start", "", "chrome", url],
+                              capture_output=True).returncode == 0:
+                return
+        else:
+            for exe in ("google-chrome", "google-chrome-stable", "chromium",
+                        "chromium-browser"):
+                if shutil.which(exe):
+                    subprocess.Popen([exe, url])
+                    return
+    except OSError:
+        pass
+    import webbrowser                  # Chrome not found — default browser
+    webbrowser.open(url)
+
+
+def _watch_tunnel(proc):
+    """Echo cloudflared's output and open the public URL as soon as it
+    appears (each quick-tunnel gets a fresh https://….trycloudflare.com)."""
+    opened = False
+    for line in proc.stdout:
+        print(line, end="", flush=True)
+        if not opened:
+            m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+            if m:
+                opened = True
+                url = m.group(0)
+                print(f"\n>>> Public link: {url}", flush=True)
+                print(">>> Opening it in Google Chrome…\n", flush=True)
+                _open_in_browser(url)
+
+
 def main():
     os.chdir(ROOT)
     _free_port()
@@ -93,13 +134,18 @@ def main():
     cloudflared = shutil.which("cloudflared")
     if cloudflared:
         print()
-        print("  Opening a public link for MOBILE DATA below.")
-        print("  Look for the https://<something>.trycloudflare.com line —")
-        print("  open THAT on your phone. (It changes each time you start.)")
+        print("  Opening a public link for MOBILE DATA — it will pop up in")
+        print("  Google Chrome automatically. Send that link to your phone.")
+        print("  (It changes each time you start.)")
         print("=" * 60)
         print()
+        # cloudflared logs (incl. the URL) go to stderr — merge and watch.
         tunnel_proc = subprocess.Popen(
-            [cloudflared, "tunnel", "--url", f"http://localhost:{PORT}"])
+            [cloudflared, "tunnel", "--url", f"http://localhost:{PORT}"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1)
+        threading.Thread(target=_watch_tunnel, args=(tunnel_proc,),
+                         daemon=True).start()
     else:
         print()
         print("  (Install 'cloudflared' to also get a link that works on")
