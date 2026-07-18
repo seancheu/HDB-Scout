@@ -134,19 +134,6 @@
       <div id="toppicks-cards" class="tp-cards"></div>
     </section>
 
-    <div id="list-head" class="list-head">
-      <span></span>
-      <span>Unit</span>
-      <span title="Asking price · est. monthly mortgage below">Price</span>
-      <span title="Floor area · price per square foot below">Size</span>
-      <span title="Walking distance to the nearest station">Distance to MRT</span>
-      <span title="Year the block was completed (Temporary Occupation Permit)">TOP</span>
-      <span title="Years remaining on the 99-year HDB lease">Lease left</span>
-      <span title="How long the listing has been on the market">Listed</span>
-      <span></span>
-      <span></span>
-      <span></span>
-    </div>
     <div id="list" class="list"></div>
     <div id="pager" class="pager hidden"></div>
     <p id="empty" class="empty">No saved properties yet.</p>
@@ -256,6 +243,20 @@
     }
     const money = n => 'S$' + n.toLocaleString();
     const moneyK = n => 'S$' + Math.round(n / 1000) + 'k';
+    // Humanized figures for cards; exact values live in details & tooltips.
+    const moneyShort = n => {
+      if (n == null) return '—';
+      if (n >= 1e6) return 'S$' + (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+      if (n >= 10000) return 'S$' + Math.round(n / 1000) + 'k';
+      if (n >= 1000) return 'S$' + (n / 1000).toFixed(1) + 'k';
+      return 'S$' + Math.round(n);
+    };
+    const walkText = r => {
+      const min = mrtWalkMin(r);
+      const name = (r.nearest_mrt || '').replace(/ (MRT|LRT) Station$/i, '');
+      if (min != null && name) return `${min}-min walk to ${name}`;
+      return name || null;
+    };
 
     // ---- your financials -----------------------------------------------------
     let FIN = lsJSON('fin');
@@ -345,11 +346,18 @@
         }
         const scopeTxt = d.scope === 'block' ? 'in this block' : 'on this street';
         const rk = n => money(Math.round(n / 1000) * 1000);   // avoid false precision
-        let verdict;
-        if (d.cov == null) verdict = '';
-        else if (d.cov > 5000) verdict = `<p class="cov-verdict warn-t">≈ <b>${rk(d.cov)} cash over</b> the estimated valuation — likely COV territory.</p>`;
-        else if (d.cov < -5000) verdict = `<p class="cov-verdict good-t">Asking is <b>${rk(-d.cov)} below</b> the estimated valuation — low COV risk.</p>`;
-        else verdict = '<p class="cov-verdict good-t">Asking is in line with the estimated valuation — COV likely minimal.</p>';
+        let verdict, take, takeTone;
+        if (d.cov == null) { verdict = ''; take = `est. valuation ${moneyShort(d.median)}`; takeTone = ''; }
+        else if (d.cov > 5000) {
+          verdict = `<p class="cov-verdict warn-t">≈ <b>${rk(d.cov)} cash over</b> the estimated valuation — likely COV territory.</p>`;
+          take = `≈ ${moneyShort(d.cov)} cash over — COV risk`; takeTone = 'warn-t';
+        } else if (d.cov < -5000) {
+          verdict = `<p class="cov-verdict good-t">Asking is <b>${rk(-d.cov)} below</b> the estimated valuation — low COV risk.</p>`;
+          take = `${moneyShort(-d.cov)} below valuation — low risk`; takeTone = 'good-t';
+        } else {
+          verdict = '<p class="cov-verdict good-t">Asking is in line with the estimated valuation — COV likely minimal.</p>';
+          take = 'in line with valuation — COV likely minimal'; takeTone = 'good-t';
+        }
         // Likely COV range from the p25–p75 valuation band.
         let range = '';
         if (d.cov_low != null && d.cov_high != null && d.band_low !== d.band_high) {
@@ -364,7 +372,7 @@
           notes.push('⚠ Renovated unit: HDB valuation largely ignores renovation, so the reno premium usually becomes cash over.');
         if ((d.drift_pct_mo || 0) >= 0.3)
           notes.push(`⚠ Prices here are rising ~${(d.drift_pct_mo * 12).toFixed(0)}%/yr — official valuations lag a hot market, so budget extra cash.`);
-        box.innerHTML = `<span class="label">💵 Potential COV (est.)</span>
+        box.innerHTML = `<details class="insight"><summary><span class="ins-t">💵 <b>Potential COV</b></span><span class="ins-take ${takeTone}">${take}</span></summary><div class="ins-body">
           ${verdict}
           ${range}
           <p class="cov-line">Based on <b>${d.count}</b> similar transactions ${scopeTxt} (last ${d.months} mo): est. valuation <b>${money(d.median)}</b> · full range ${money(d.low)}–${money(d.high)}</p>
@@ -372,7 +380,8 @@
           ${(d.adjustments || []).length ? `<p class="cov-line muted">Refinements: ${d.adjustments.map(esc).join(' · ')}</p>` : ''}
           ${trendLine(d)}
           <ul class="cov-comps">${d.latest.map(c => `<li>${esc(c.month)} · Blk ${esc(c.block)} · storey ${esc(c.storey)} · ${Math.round(c.sqm * 10.7639).toLocaleString()} sqft · <b>${money(c.price)}</b></li>`).join('')}</ul>
-          <p class="cov-note muted">Valuer-style estimate from official HDB resale data (comps adjusted for market trend, storey and remaining lease — Bala's curve). Actual valuation is set by HDB after OTP — COV is payable in cash only.</p>`;
+          <p class="cov-note muted">Valuer-style estimate from official HDB resale data (comps adjusted for market trend, storey and remaining lease — Bala's curve). Actual valuation is set by HDB after OTP — COV is payable in cash only.</p>
+        </div></details>`;
       } catch (err) { line.textContent = 'Could not load transaction data: ' + err; }
     }
 
@@ -496,11 +505,22 @@
           </li>`;
         }).join('');
         const yr = d.schools.find(s => s.year)?.year;
-        box.innerHTML = `<span class="label">🎓 P1 registration check${yr ? ` (${yr})` : ''}</span>
+        // Takeaway: nearest school's verdict, plus how many more are listed.
+        const first = d.schools[0] || {};
+        const p1Take = (first.name ? `${esc(first.name.replace(/ (Primary )?School$/i, ''))}: ` : '') +
+          esc(first.verdict || (first.unmatched ? 'no MOE data' : '')) +
+          (d.schools.length > 1 ? ` · +${d.schools.length - 1} more` : '');
+        const p1Tone = first.tone === 'warn' ? 'warn-t' : (first.tone === 'good' ? 'good-t' : '');
+        box.innerHTML = `<details class="insight"><summary><span class="ins-t">🎓 <b>P1 registration${yr ? ` (${yr})` : ''}</b></span><span class="ins-take ${p1Tone}">${p1Take}</span></summary><div class="ins-body">
           <ul class="p1-list">${rows}</ul>
-          <p class="cov-note muted">Phase 1 = sibling already in the school. <b>Phase 2C</b> = everyone else — this is the one home address decides: living <b>within 1 km</b> gets first priority in the ballot. ×&nbsp;= applicants per place that year. Sources: MOE vacancies &amp; balloting data · multi-year history from sgschooling.com.</p>`;
-        // On narrow screens the chart scrolls — start at the newest years.
-        box.querySelectorAll('.hist-scroll').forEach(el => { el.scrollLeft = el.scrollWidth; });
+          <p class="cov-note muted">Phase 1 = sibling already in the school. <b>Phase 2C</b> = everyone else — this is the one home address decides: living <b>within 1 km</b> gets first priority in the ballot. ×&nbsp;= applicants per place that year. Sources: MOE vacancies &amp; balloting data · multi-year history from sgschooling.com.</p>
+        </div></details>`;
+        // On narrow screens the chart scrolls — start at the newest years
+        // (measure when the card opens; hidden content has no scrollWidth).
+        box.querySelector('details')?.addEventListener('toggle', e => {
+          if (e.target.open)
+            box.querySelectorAll('.hist-scroll').forEach(el => { el.scrollLeft = el.scrollWidth; });
+        });
       } catch (err) { line.textContent = 'Could not load MOE data: ' + err; }
     }
 
@@ -764,7 +784,7 @@
             ${r.thumbnail ? `<img src="${esc(r.thumbnail)}" loading="lazy" alt="">` : '<span class="tp-ph">🏠</span>'}
             <div>
               <b>${esc(r.block_street) || '—'}</b>
-              <div class="tp-price">${esc(r.price) || ''} <span class="score-pill" style="--s:${r._score}">${r._score}</span></div>
+              <div class="tp-price" title="${esc(r.price || '')}">${priceNum(r) ? moneyShort(priceNum(r)) : esc(r.price) || ''} <span class="score-pill" style="--s:${r._score}">${r._score}</span></div>
             </div>
           </div>
           <p class="tp-why">${reasonsFor(r, scored).map(esc).join(' · ') || 'strong overall fit'}</p>
@@ -1065,7 +1085,6 @@
       if (!rows.length) emptyEl.textContent = ROWS.length
         ? 'No listings match — try clearing the filter or switching tabs.'
         : 'No saved properties yet.';
-      document.getElementById('list-head').style.display = rows.length ? 'grid' : 'none';
       for (const r of rows) {
         const item = document.createElement('div');
         item.className = 'item';
@@ -1085,6 +1104,18 @@
         const cc = commuteChip(r);
         if (cc) chips.unshift(cc);
         if (r._status) chips.unshift({label: STATUS_LABEL[r._status] || r._status, tone: 'status ' + r._status});
+        // Verdict-first row: address + price up front, ONE muted summary line
+        // with the facts that decide a viewing; everything else in details.
+        const summary = [
+          (r.beds || r.baths) ? `${esc(r.beds || '?')}🛏 ${esc(r.baths || '?')}🛁` : null,
+          sizeNum(r) ? `${sizeNum(r).toLocaleString()} sqft` : null,
+          walkText(r) ? esc(walkText(r)) : null,
+          leaseNum(r) != null ? `${leaseNum(r)} yrs left` : null,
+          listedDays(r) != null ? esc(listedText(r)) : null,
+        ].filter(Boolean).join(' · ');
+        const exact = [r.price, r.size_sqft,
+          psfNum(r) && `S$${psfNum(r).toLocaleString()} psf`,
+          r.top_year && `TOP ${r.top_year}`, mrtLine(r)].filter(Boolean).join(' · ');
         item.innerHTML = `
           <div class="item-head">
             <input type="checkbox" class="pick" data-id="${r._id}" ${selected.has(r._id) ? 'checked' : ''} title="Select to compare" aria-label="Select to compare">
@@ -1099,17 +1130,11 @@
                   <span class="tname">${esc(r.block_street) || '—'}</span>
                   ${gmapsDir(r) ? `<a class="dirlink" href="${esc(gmapsDir(r))}" target="_blank" rel="noopener" title="Directions in Google Maps">📍</a>` : ''}
                 </span>
-                ${((r.beds || r.baths) || chips.length) ? `<span class="flags">${(r.beds || r.baths) ? `<span class="bb">${esc(r.beds||'?')}🛏 ${esc(r.baths||'?')}🛁</span>` : ''}${chips.slice(0, 5).map(f => `<span class="flag ${f.tone}">${esc(f.label)}</span>`).join('')}${chips.length > 5 ? `<span class="flag more" title="${esc(chips.slice(5).map(f => f.label).join(', '))}">+${chips.length - 5}</span>` : ''}</span>` : ''}
+                ${summary ? `<span class="row-sum" title="${esc(exact)}">${summary}</span>` : ''}
+                ${chips.length ? `<span class="flags">${chips.slice(0, 2).map(f => `<span class="flag ${f.tone}">${esc(f.label)}</span>`).join('')}${chips.length > 2 ? `<span class="flag more" title="${esc(chips.slice(2).map(f => f.label).join(', '))}">+${chips.length - 2}</span>` : ''}</span>` : ''}
               </div>
             </div>
-            <div class="meta">
-              <div class="col price" data-label="Price">${esc(r.price) || '—'}${priceChangeChip(r)}${(() => { const a = affordability(r); return a ? `<span class="mo">~${money(a.monthly)}/mo</span>` : ''; })()}</div>
-              <div class="col size" data-label="Size">${esc(r.size_sqft) || '—'}${psfNum(r) ? `<span class="mo">S$${psfNum(r).toLocaleString()} psf</span>` : ''}</div>
-              <div class="col mrt" data-label="MRT">${esc(mrtLine(r))}</div>
-              <div class="col top" data-label="TOP">${esc(r.top_year) || '—'}</div>
-              <div class="col lease" data-label="Lease">${leaseText(r)}</div>
-              <div class="col listed" data-label="Listed" title="${esc(r.listed_date || '')}">${listedText(r)}</div>
-            </div>
+            <div class="col price" title="${esc(exact)}">${priceNum(r) ? moneyShort(priceNum(r)) : (esc(r.price) || '—')}${priceChangeChip(r)}</div>
             <button class="reject ${r._status === 'rejected' ? 'on' : ''}" title="${r._status === 'rejected' ? 'Un-reject' : 'Not for me'}" aria-label="${r._status === 'rejected' ? 'Un-reject listing' : 'Reject listing'}">👎</button>
             <button class="chev" title="Details" aria-label="Toggle details">▾</button>
             <button class="del" data-id="${r._id}" title="Remove" aria-label="Remove listing">✕</button>
@@ -1123,25 +1148,17 @@
               `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" loading="lazy" alt=""></a>`).join('')}</div>` : '';
           })()}
           <div class="item-body">
-            <div class="track">
-              <label class="track-status">Status
-                <select class="status-sel">
-                  <option value="">—</option>
-                  <option value="viewing" ${r._status==='viewing'?'selected':''}>Viewing</option>
-                  <option value="offered" ${r._status==='offered'?'selected':''}>Offered</option>
-                  <option value="rejected" ${r._status==='rejected'?'selected':''}>Rejected</option>
-                </select>
-              </label>
-              <button class="ghost recheck" data-id="${r._id}">🔄 Re-check price</button>
-              <span class="recheck-msg muted"></span>
-            </div>
-            <textarea class="note" placeholder="Your notes…">${esc(r._note)}</textarea>
-            ${keyDetails(r)}
             ${r._deep && r.price ? '<div class="covbox"><span class="label">💵 Potential COV (est.)</span><p class="cov-line muted">Checking recent transactions…</p></div>' : ''}
             ${r._deep && r.schools_json && r.schools_json !== '[]' ? '<div class="p1box"><span class="label">🎓 P1 registration check</span><p class="cov-line muted">Checking MOE balloting data…</p></div>' : ''}
             ${(() => {
               const a = afford(r);
               if (!a) return '';
+              let take = `~${moneyShort(a.monthly)}/mo · ~${moneyShort(a.upfront)} upfront`;
+              if (finActive() && (a.upfrontOk != null || a.monthlyOk != null)) {
+                take += (a.upfrontOk !== false && a.monthlyOk !== false)
+                  ? ' · <b class="good-t">✓ fits your budget</b>'
+                  : ' · <b class="warn-t">⚠ stretches your budget</b>';
+              }
               let personal = '';
               if (finActive()) {
                 const bits = [];
@@ -1153,30 +1170,57 @@
                   : `⚠ ${money(a.monthlyGap)}/mo over your ${money(Number(FIN.monthly))}/mo budget`);
                 if (bits.length) personal = `<p class="afford-you">${bits.join(' &nbsp;·&nbsp; ')}</p>`;
               }
-              return `<div class="afford"><span class="label">Affordability (est.)</span>
+              return `<details class="insight"><summary><span class="ins-t">💰 <b>Affordability</b></span><span class="ins-take">${take}</span></summary><div class="ins-body">
                 <p class="afford-line"><b>~${money(a.monthly)}/mo</b> mortgage (75% loan, 25 yrs @ 2.6%) &nbsp;·&nbsp; <b>~${money(a.upfront)}</b> cash/CPF upfront (${money(a.down)} down-payment + ${money(a.duty)} stamp duty)</p>
-                ${personal}</div>`;
+                ${personal}</div></details>`;
+            })()}
+            ${(() => {
+              const kdTake = [(r.beds || r.baths) ? `${esc(r.beds || '?')}-bed` : null,
+                r.size_sqft ? esc(r.size_sqft) : null,
+                r.top_year ? `TOP ${esc(r.top_year)}` : null,
+                leaseNum(r) != null ? `${leaseNum(r)} yrs left` : null].filter(Boolean).join(' · ');
+              return `<details class="insight"><summary><span class="ins-t">🏠 <b>Key details</b></span><span class="ins-take">${kdTake || 'address, schools, stations'}</span></summary><div class="ins-body">${keyDetails(r)}</div></details>`;
             })()}
             ${(() => { let g = []; try { g = JSON.parse(r.images_json || '[]'); } catch {} return g.length ? `
               <div class="gallery-wrap"><span class="label">Photos (${g.length})</span>
                 <div class="gallery">${g.map(im => `<a href="${esc(im.url)}" target="_blank" rel="noopener"><img src="${esc(im.url)}" loading="lazy" alt="${esc(im.caption)}" title="${esc(im.caption)}"></a>`).join('')}</div>
               </div>` : ''; })()}
-            ${r.about ? `<div class="about"><span class="label">About this property</span><p class="about-text">${esc(r.about)}</p></div>` : ''}
-            <p class="linkline">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">View original listing ↗</a>` : ''}${gmapsDir(r) ? `${link ? ' &nbsp;·&nbsp; ' : ''}<a href="${esc(gmapsDir(r))}" target="_blank" rel="noopener">📍 Directions in Google Maps ↗</a>` : ''}</p>
-            ${r._deep ? `
-              <div class="share-wrap">
-                ${(() => { let ag = {}; try { ag = JSON.parse(r.agent_json || '{}'); } catch {} return ag.name ? `<p class="agent-line"><span class="label">Listing agent</span> ${esc(ag.name)}${ag.license ? ` · ${esc(ag.license)}` : ''}${ag.phone ? ` · <a href="tel:${esc((ag.phone||'').replace(/[^\\d+]/g,''))}">${esc(ag.phone)}</a>` : ''}</p>` : ''; })()}
-                <button class="ghost accent share-btn" type="button">📤 Send to my agent</button>
-                <div class="share hidden">
-                  <textarea class="share-msg" rows="10"></textarea>
-                  <div class="share-row">
-                    <input class="myagent" type="text" placeholder="Your agent's WhatsApp, e.g. +65 9123 4567">
-                    <button class="ghost share-copy" type="button">📋 Copy</button>
-                    <button class="ghost accent share-wa" type="button">🟢 WhatsApp</button>
+            ${r.about ? `<details class="insight"><summary><span class="ins-t">📝 <b>About</b></span><span class="ins-take">${esc(r.about.slice(0, 90))}…</span></summary><div class="ins-body"><p class="about-text">${esc(r.about)}</p></div></details>` : ''}
+            ${(() => {
+              const noteTake = [r._status ? (STATUS_LABEL[r._status] || r._status) : null,
+                                r._note ? '📝 has notes' : null].filter(Boolean).join(' · ');
+              let ag = {}; try { ag = JSON.parse(r.agent_json || '{}'); } catch {}
+              return `<details class="insight"><summary><span class="ins-t">⚙️ <b>Tracking &amp; notes</b></span><span class="ins-take">${esc(noteTake) || 'status, notes, price re-check, share'}</span></summary><div class="ins-body">
+              <div class="track">
+                <label class="track-status">Status
+                  <select class="status-sel">
+                    <option value="">—</option>
+                    <option value="viewing" ${r._status==='viewing'?'selected':''}>Viewing</option>
+                    <option value="offered" ${r._status==='offered'?'selected':''}>Offered</option>
+                    <option value="rejected" ${r._status==='rejected'?'selected':''}>Rejected</option>
+                  </select>
+                </label>
+                <button class="ghost recheck" data-id="${r._id}">🔄 Re-check price</button>
+                <span class="recheck-msg muted"></span>
+              </div>
+              <textarea class="note" placeholder="Your notes…">${esc(r._note)}</textarea>
+              ${r._deep ? `
+                <div class="share-wrap">
+                  ${ag.name ? `<p class="agent-line"><span class="label">Listing agent</span> ${esc(ag.name)}${ag.license ? ` · ${esc(ag.license)}` : ''}${ag.phone ? ` · <a href="tel:${esc((ag.phone||'').replace(/[^\\d+]/g,''))}">${esc(ag.phone)}</a>` : ''}</p>` : ''}
+                  <button class="ghost accent share-btn" type="button">📤 Send to my agent</button>
+                  <div class="share hidden">
+                    <textarea class="share-msg" rows="10"></textarea>
+                    <div class="share-row">
+                      <input class="myagent" type="text" placeholder="Your agent's WhatsApp, e.g. +65 9123 4567">
+                      <button class="ghost share-copy" type="button">📋 Copy</button>
+                      <button class="ghost accent share-wa" type="button">🟢 WhatsApp</button>
+                    </div>
+                    <p class="share-hint muted"></p>
                   </div>
-                  <p class="share-hint muted"></p>
-                </div>
-              </div>` : ''}
+                </div>` : ''}
+              </div></details>`;
+            })()}
+            <p class="linkline">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">View original listing ↗</a>` : ''}${gmapsDir(r) ? `${link ? ' &nbsp;·&nbsp; ' : ''}<a href="${esc(gmapsDir(r))}" target="_blank" rel="noopener">📍 Directions in Google Maps ↗</a>` : ''}</p>
             ${!r._deep ? '<p class="deepen-msg muted">Full details (TOP, lease, map) load when you open this…</p>' : ''}
             ${r._mappable ? `<iframe class="rowmap" data-src="/map/${r._id}" title="Map" loading="lazy"></iframe>` : (r._deep ? '<p class="muted">No map data for this listing.</p>' : '')}
           </div>`;

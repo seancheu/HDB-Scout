@@ -144,7 +144,17 @@ def history(school_name, years=8):
         return None
     d = _load()
     hit = d["schools"].get(slug)
-    if hit and hit.get("fetched", 0) > time.time() - _TTL:
+    # Season-aware freshness: while the newest cached year lags the year we
+    # expect to exist (results publish in the second half of each year),
+    # re-check every few days instead of monthly.
+    from datetime import date
+    t = date.today()
+    expected = t.year if t.month >= 7 else t.year - 1
+    ttl = _TTL
+    if hit and max((y.get("year", 0) for y in hit.get("years") or []),
+                   default=0) < expected:
+        ttl = 3 * 24 * 3600
+    if hit and hit.get("fetched", 0) > time.time() - ttl:
         data = hit.get("years")
     else:
         data = _fetch_history(slug)

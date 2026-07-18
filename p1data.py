@@ -183,9 +183,26 @@ def _load():
     return None
 
 
+def _expected_year():
+    """The balloting year we expect to exist by now: results of each year's
+    exercise are published in the second half of that year."""
+    from datetime import date
+    t = date.today()
+    return t.year if t.month >= 7 else t.year - 1
+
+
 def is_stale():
     d = _load()
-    return (not d) or (time.time() - d.get("fetched", 0) > _TTL)
+    if not d:
+        return True
+    age = time.time() - d.get("fetched", 0)
+    # Season-aware: while the newest cached year lags the expected year
+    # (e.g. waiting for 2026 results), re-check every few days instead of
+    # monthly so new data lands quickly.
+    years = [int(s["year"]) for s in d.get("schools", {}).values()
+             if s.get("year")]
+    ttl = 3 * 24 * 3600 if max(years, default=0) < _expected_year() else _TTL
+    return age > ttl
 
 
 def lookup(school_name):

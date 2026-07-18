@@ -32,13 +32,16 @@ you have to decode.
 
 ### 💵 Is it overpriced? 🎓 Will my kid get in?
 The two questions that actually decide a purchase, answered per listing from
-official data: **potential COV**, estimated the way a valuer actually works —
-comps adjusted individually for storey (Bala-fitted premium per floor) and
-remaining lease (Bala's leasehold curve), recency-weighted toward the last 6
-months, with a likely-valuation band instead of a single number — and the
-**P1 registration outlook** for nearby schools combined with *this flat's*
-distance, linking straight through to each school's official MOE results —
-plus what it costs you monthly and upfront against your own budget.
+official data — and every answer **leads with one plain-English line**, with
+the numbers a tap away: **potential COV**, estimated the way a valuer actually
+works (comps adjusted for storey and remaining lease via Bala's curve,
+recency-weighted, with a likely-valuation band), and the **P1 registration
+outlook** — this year's balloting for nearby schools combined with *this
+flat's* distance, plus an in-app chart of each school's Phase 2C demand
+across the years so you can see a school getting harder before it becomes a
+problem. Balloting data refreshes automatically when each new year's results
+are published. And what it all costs you monthly and upfront, against your
+own budget.
 
 ![Potential COV, P1 registration check and affordability](docs/03-cov-and-p1.png)
 
