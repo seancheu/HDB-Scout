@@ -1277,8 +1277,12 @@
           renderList();
         });
         item.querySelector('.status-sel').addEventListener('click', e => e.stopPropagation());
-        // Notes (save on blur)
+        // Notes (save on blur; auto-grow to fit the text)
         const note = item.querySelector('.note');
+        const fitNote = () => { note.style.height = 'auto'; note.style.height = (note.scrollHeight + 2) + 'px'; };
+        note.addEventListener('input', fitNote);
+        // Size it when its card opens — hidden textareas have no scrollHeight.
+        note.closest('details')?.addEventListener('toggle', e => { if (e.target.open) fitNote(); });
         note.addEventListener('click', e => e.stopPropagation());
         note.addEventListener('blur', async () => {
           if (note.value !== r._note) { await patchRow(r._id, {note: note.value}); r._note = note.value; }

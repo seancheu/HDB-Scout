@@ -388,7 +388,8 @@ body {
 }
 .recheck-msg { font-size: 12px; }
 .note {
-  width: 100%; margin-top: 12px; min-height: 52px; resize: vertical;
+  width: 100%; margin-top: 12px; min-height: 52px;
+  resize: none; overflow: hidden;      /* auto-grows to fit the text */
   padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px;
   font: inherit; font-size: 13px; background: var(--soft); color: var(--ink); outline: none;
 }
