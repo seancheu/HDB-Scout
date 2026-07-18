@@ -905,8 +905,8 @@ if __name__ == "__main__":
     port = 5001  # 5000 is often taken by macOS AirPlay Receiver / ControlCentre.
     ip = _lan_ip()
     print("\n" + "=" * 56)
-    print("  PropertyGuru Extractor is running")
-    print(f"  On this Mac:              http://127.0.0.1:{port}")
+    print("  HDB Scout is running")
+    print(f"  On this computer:           http://127.0.0.1:{port}")
     print(f"  On your phone (same Wi-Fi): http://{ip}:{port}")
     print("  (Keep this window open. Ctrl+C to stop.)")
     print("=" * 56 + "\n")
