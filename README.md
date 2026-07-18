@@ -18,9 +18,11 @@ computer**; your shortlist, notes, and finances never leave your machine.
 ## See it work
 
 ### One paste → your whole search, ranked
-Import an entire filtered PropertyGuru search. Every listing arrives with
-photos; town tabs and a colour-coded map show your search geography at a
-glance.
+Import an entire filtered PropertyGuru search. Every listing arrives with a
+photo carousel of its first 4 photos, right in the list — no clicking in to
+see the place; town tabs, pagination and a colour-coded map show your search
+geography at a glance. Promoted/paid-placement cards (Turbo, Spotlight,
+Featured…) are skipped automatically — you only see organic listings.
 
 ### ✨ Top picks, with reasons
 Tell it what you want and it names the best few — in plain English, not scores
@@ -30,10 +32,13 @@ you have to decode.
 
 ### 💵 Is it overpriced? 🎓 Will my kid get in?
 The two questions that actually decide a purchase, answered per listing from
-official data: **potential COV** against recent transacted comps (size-matched,
-floor-matched, trend-adjusted) with a street price trend, and the **P1
-registration outlook** for nearby schools combined with *this flat's* distance
-— plus what it costs you monthly and upfront against your own budget.
+official data: **potential COV**, estimated the way a valuer actually works —
+comps adjusted individually for storey (Bala-fitted premium per floor) and
+remaining lease (Bala's leasehold curve), recency-weighted toward the last 6
+months, with a likely-valuation band instead of a single number — and the
+**P1 registration outlook** for nearby schools combined with *this flat's*
+distance, linking straight through to each school's official MOE results —
+plus what it costs you monthly and upfront against your own budget.
 
 ![Potential COV, P1 registration check and affordability](docs/03-cov-and-p1.png)
 
@@ -45,7 +50,8 @@ CHAS clinics — with walking distances. Click any pin to jump to the listing.
 
 ### 🔎 Tell it what you want — once
 Plain-language criteria, your budget, your commute, and saved searches you can
-refresh anytime (duplicates removed automatically).
+rename, refresh anytime (duplicates removed automatically), and reuse per
+client or area.
 
 ![Set-up panel: preferences, budget, commute, saved searches](docs/05-setup.png)
 
@@ -80,25 +86,33 @@ shortlisted units — and a one-tap **WhatsApp share** that sends a clean summar
 ## Features
 
 - **Bulk import** — paste one listing URL or a whole search-results URL; every
-  page is walked, de-duplicated, and loaded with photos in one go
-- **Saved searches** — save a filter link per client/area, refresh anytime
+  page is walked, de-duplicated, and loaded with photos in one go; promoted /
+  paid-placement cards (Turbo, Spotlight, Featured…) are skipped automatically
+- **Saved searches** — save a filter link per client/area, rename it anything
+  you like, refresh anytime
 - **What-you-want filters + fit score** — plain-language criteria; "must"
   checkboxes hide failures, the rest rank by fit (0–100)
 - **Top Picks** — best 3 with reasons; 🏆 Best-for-you call; 👎 one-tap triage
-- **💵 Potential COV** — asking price vs recent official resale transactions
-  (same block → street, size-matched, floor-matched, trend-adjusted, outliers
-  trimmed) + street price sparkline
+- **💵 Potential COV** — valuer-style estimate from official resale
+  transactions: same block → street, size-matched, then each comp individually
+  adjusted for storey (premium fitted from the street's own data) and
+  remaining lease (Bala's leasehold curve), recency-weighted toward the last
+  6 months, outliers trimmed, with a likely-valuation band + street sparkline
 - **🎓 P1 registration check** — MOE vacancies & balloting per nearby school,
   combined with *this flat's* radial distance: "within 1 km — the group that
-  got places last year"
+  got places last year" — with a direct link to each school's official MOE
+  results page
 - **Affordability** — monthly mortgage + cash/CPF upfront vs your saved budget
 - **🏢 Block profile** — official HDB record: built year, floors, units, MSCP
 - **Maps** — per-listing (MRT/LRT, schools, malls, hawkers, preschools, CHAS
   clinics) and area overview colour-coded by town; Google Maps directions link
+- **Photo carousel** — first 4 photos visible in the list for every listing,
+  no click-through needed; larger hover preview of the hero shot on desktop
 - **Tracking** — ★ shortlist tab, status (viewing/offered/rejected), private
   notes, price-change re-checks (single or whole shortlist)
 - **Share to agent/client** — editable summary → copy or WhatsApp
-- **Commute times**, dark mode, town tabs, mobile-friendly, CSV export
+- **Commute times**, dark mode (default), pagination, town tabs,
+  mobile-friendly, CSV export
 
 ## Quick start
 
@@ -130,9 +144,9 @@ tunnel.
   persistent profile) and parsed from each site's embedded structured data —
   not brittle CSS selectors.
 - Public data comes from official sources: HDB resale transactions & property
-  info and CHAS clinics/preschools (data.gov.sg), P1 balloting (moe.gov.sg),
-  geocoding/routing (OneMap). Downloads are cached locally and refreshed
-  periodically.
+  info and CHAS clinics/preschools (data.gov.sg), P1 balloting (moe.gov.sg —
+  each school links straight to its own official results page), geocoding/
+  routing (OneMap). Downloads are cached locally and refreshed periodically.
 - Everything is stored in flat local files: `results.csv` (your listings,
   notes, shortlist), `saved_searches.json`, and dataset caches. Delete them
   anytime; `.gitignore` keeps them out of the repo.
