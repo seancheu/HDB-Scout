@@ -396,24 +396,56 @@
         };
         const moeA = (name, label) =>
           `<a class="p1-moe" href="${esc(moeLink(name))}" target="_blank" rel="noopener" title="Official MOE vacancies & balloting data for ${esc(name)}">${label}</a>`;
-        // Multi-year Phase-2C history (sgschooling.com): is this school getting
-        // harder or easier to enter? ⚠ = that year went to ballot.
+        // Multi-year Phase-2C history (sgschooling.com), shown in-app as a
+        // small bar chart: bars = applicants per place; above the dashed 1×
+        // line means more applicants than places; amber bars went to ballot.
         const histLine = s => {
-          if (!s.history || !s.history.length) return '';
-          const chips = s.history.slice(0, 6).map(y => {
-            const r = y.ratio != null ? y.ratio.toFixed(1) + '×' : '—';
-            const tip = `${y.applied ?? '?'} applied for ${y.vacancies ?? '?'} places${y.note ? ' · ballot ' + y.note : ''}`;
-            return `<span class="${y.balloted ? 'h-ballot' : 'h-clear'}" title="${esc(tip)}">${y.year} ${y.balloted ? '⚠' : ''}${r}</span>`;
-          }).join(' · ');
-          let trend = '';
-          const rs = s.history.filter(y => y.ratio != null);
-          if (rs.length >= 3) {
-            const now = rs[0].ratio, past = rs[Math.min(3, rs.length - 1)].ratio;
-            if (now > past * 1.3) trend = ' <b class="warn-t">— getting harder</b>';
-            else if (now < past * 0.7) trend = ' <b class="good-t">— easing</b>';
-          }
-          const link = s.history_url ? ` · <a class="p1-moe" href="${esc(s.history_url)}" target="_blank" rel="noopener" title="Full ballot history on sgschooling.com">history ↗</a>` : '';
-          return `<div class="p1-hist">2C over the years: ${chips}${trend}${link}</div>`;
+          const yrs = (s.history || []).filter(y => y.ratio != null).slice(0, 8).reverse();
+          if (yrs.length < 2) return '';
+          // Fill the card's full width: chart width comes from the container,
+          // bars spread evenly across it (min slot 40px → scrolls on phones).
+          const left = 34, right = 8, H = 104, top = 16, bot = 26;
+          const W = Math.max(left + right + 40 * yrs.length,
+                             (box.clientWidth || 640) - 58);
+          const STEP = (W - left - right) / yrs.length;
+          const barW = Math.min(64, Math.max(20, STEP * 0.62));
+          const plotH = H - top - bot;
+          const maxR = Math.max(1.4, ...yrs.map(y => y.ratio));
+          const yOf = v => top + plotH * (1 - v / maxR);
+          const bars = yrs.map((d, i) => {
+            const x = left + i * STEP + (STEP - barW) / 2;
+            const cx = x + barW / 2;
+            const tip = `${d.year}: ${d.applied} applied for ${d.vacancies} places` +
+                        (d.balloted ? ' — went to ballot' : ' — no ballot');
+            return `<rect x="${x.toFixed(1)}" y="${yOf(d.ratio)}" width="${barW.toFixed(1)}" height="${Math.max(2, plotH * d.ratio / maxR)}" rx="4"
+                      class="${d.balloted ? 'hb-warn' : 'hb-ok'}"><title>${esc(tip)}</title></rect>
+              <text x="${cx.toFixed(1)}" y="${yOf(d.ratio) - 4}" class="hb-v">${d.ratio.toFixed(1)}</text>
+              <text x="${cx.toFixed(1)}" y="${H - 10}" class="hb-x">’${String(d.year).slice(2)}</text>`;
+          }).join('');
+          const oneY = yOf(1);
+          // Plain-English verdict: latest year + how long it's been oversubscribed.
+          const newest = yrs[yrs.length - 1];
+          let latest = `${newest.year}: <b>${newest.applied} families applied for ${newest.vacancies} places</b>`;
+          latest += newest.balloted
+            ? ((newest.note || '').includes('<1')
+                ? ' — even living within 1 km meant a ballot.'
+                : ' — decided by ballot.')
+            : (newest.ratio <= 1 ? ' — everyone got a place.' : '.');
+          let streak = 0;
+          for (let i = yrs.length - 1; i >= 0 && yrs[i].ratio > 1; i--) streak++;
+          const trend = streak >= 2
+            ? `<b class="warn-t">Oversubscribed ${streak} years running.</b>`
+            : (streak === 0 ? '<b class="good-t">Not oversubscribed lately.</b>' : '');
+          return `<div class="p1-hist">
+            <div class="hist-title">Phase 2C demand, applicants per place</div>
+            <div class="hist-scroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img"
+                aria-label="Applicants per Phase 2C place by year">
+              <line x1="36" x2="${W - 4}" y1="${oneY}" y2="${oneY}" class="hb-line"/>
+              <text x="2" y="${oneY + 3}" class="hb-y">1×</text>
+              ${bars}
+            </svg></div>
+            <p class="hist-note">${latest} ${trend}</p>
+          </div>`;
         };
         const rows = d.schools.map(s => {
           if (s.unmatched)
@@ -467,6 +499,8 @@
         box.innerHTML = `<span class="label">🎓 P1 registration check${yr ? ` (${yr})` : ''}</span>
           <ul class="p1-list">${rows}</ul>
           <p class="cov-note muted">Phase 1 = sibling already in the school. <b>Phase 2C</b> = everyone else — this is the one home address decides: living <b>within 1 km</b> gets first priority in the ballot. ×&nbsp;= applicants per place that year. Sources: MOE vacancies &amp; balloting data · multi-year history from sgschooling.com.</p>`;
+        // On narrow screens the chart scrolls — start at the newest years.
+        box.querySelectorAll('.hist-scroll').forEach(el => { el.scrollLeft = el.scrollWidth; });
       } catch (err) { line.textContent = 'Could not load MOE data: ' + err; }
     }
 

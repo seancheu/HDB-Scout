@@ -487,15 +487,25 @@ body {
 .p1-detail { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
 .p1-moe { color: var(--brand); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .p1-moe:hover { text-decoration: underline; }
-/* Multi-year Phase-2C ballot history (sgschooling.com) */
-.p1-hist { margin-top: 4px; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
-.p1-hist .h-ballot { color: #8a5a00; font-weight: 600; white-space: nowrap; cursor: help; }
-.p1-hist .h-clear { white-space: nowrap; cursor: help; }
-:root[data-theme="dark"] .p1-hist .h-ballot { color: #f0c070; }
-.p1-hist .warn-t { color: #8a5a00; }
-.p1-hist .good-t { color: #17703d; }
-:root[data-theme="dark"] .p1-hist .warn-t { color: #f0c070; }
-:root[data-theme="dark"] .p1-hist .good-t { color: #7fd6a0; }
+/* Multi-year Phase-2C ballot history — in-app bar chart */
+.p1-hist { margin-top: 10px; padding: 10px 12px; background: var(--panel);
+           border: 1px solid var(--line); border-radius: 12px; }
+.hist-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+              color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+.hist-scroll { overflow-x: auto; }
+.hist-scroll svg { display: block; width: 100%; height: auto; min-width: 320px; }
+.p1-hist .hb-ok { fill: color-mix(in srgb, var(--muted) 45%, transparent); }
+.p1-hist .hb-warn { fill: #e0a63f; }
+:root[data-theme="dark"] .p1-hist .hb-warn { fill: #f0c070; }
+.p1-hist .hb-line { stroke: var(--muted); stroke-dasharray: 3 3; opacity: .6; }
+.p1-hist .hb-x { font-size: 9.5px; fill: var(--muted); text-anchor: middle; }
+.p1-hist .hb-y { font-size: 9.5px; fill: var(--muted); }
+.p1-hist .hb-v { font-size: 9.5px; font-weight: 700; fill: var(--ink); text-anchor: middle; }
+.hist-note { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.hist-note .warn-t { color: #8a5a00; }
+.hist-note .good-t { color: #17703d; }
+:root[data-theme="dark"] .hist-note .warn-t { color: #f0c070; }
+:root[data-theme="dark"] .hist-note .good-t { color: #7fd6a0; }
 .p1-odds { margin-top: 4px; font-size: 12.5px; font-weight: 600; }
 .p1-odds.warn-t { color: #8a5a00; }
 .p1-odds.good-t { color: #17703d; }
