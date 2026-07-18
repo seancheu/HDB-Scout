@@ -56,13 +56,13 @@ client or area.
 ![Set-up panel: preferences, budget, commute, saved searches](docs/05-setup.png)
 
 ### 📱 On your phone, in your theme
-Dark by default; run it on your computer, browse it from your phone on the
-sofa — carousels, the sort sheet, and every card adapt to the screen. Prefer
-light? One tap on the toggle switches it, everywhere.
+Run it on your computer, browse it from your phone on the sofa — carousels,
+the sort sheet, and every card adapt to the screen. Dark by default; one tap
+on the toggle switches to light, everywhere.
 
 <p align="center">
   <img src="docs/07-mobile.png" alt="Mobile view" width="46%">
-  <img src="docs/06-light.png" alt="Light theme" width="52%">
+  <img src="docs/06-dark.png" alt="Dark theme" width="52%">
 </p>
 
 ---
