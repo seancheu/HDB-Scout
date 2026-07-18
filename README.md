@@ -55,12 +55,14 @@ client or area.
 
 ![Set-up panel: preferences, budget, commute, saved searches](docs/05-setup.png)
 
-### 📱 On your phone, and after dark
-Run it on your Mac, browse it from your phone on the sofa.
+### 📱 On your phone, in your theme
+Dark by default; run it on your computer, browse it from your phone on the
+sofa — carousels, the sort sheet, and every card adapt to the screen. Prefer
+light? One tap on the toggle switches it, everywhere.
 
 <p align="center">
   <img src="docs/07-mobile.png" alt="Mobile view" width="46%">
-  <img src="docs/06-dark.png" alt="Dark mode" width="52%">
+  <img src="docs/06-light.png" alt="Light theme" width="52%">
 </p>
 
 ---
@@ -116,6 +118,8 @@ shortlisted units — and a one-tap **WhatsApp share** that sends a clean summar
 
 ## Quick start
 
+**macOS / Linux**
+
 ```bash
 git clone <this-repo> hdb-scout && cd hdb-scout
 python3 -m venv venv && source venv/bin/activate
@@ -124,9 +128,22 @@ playwright install chromium        # one-time; real Chrome is used if installed
 python app.py                      # → http://127.0.0.1:5001
 ```
 
-**Requirements:** Python 3.11+, Google Chrome recommended. First import may
-show a Cloudflare verification in the Chrome window that opens — click it once;
-the browser profile remembers it.
+**Windows** (PowerShell or Command Prompt)
+
+```bat
+git clone <this-repo> hdb-scout && cd hdb-scout
+python -m venv venv && venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
+python app.py                      :: → http://127.0.0.1:5001
+```
+
+**Requirements:** Python 3.11+, Google Chrome recommended (falls back to
+Playwright's bundled Chromium if Chrome isn't found). First import may show a
+Cloudflare verification in the Chrome window that opens — click it once; the
+browser profile remembers it. The app is pure Python + a browser automation
+library, so it runs the same way on Windows, macOS, and Linux — no
+platform-specific code.
 
 **Optional — OneMap account** (free, [onemap.gov.sg](https://www.onemap.gov.sg)):
 unlocks commute times, SRX geocoding, coordinate sanity-checks, and the
@@ -134,9 +151,15 @@ hawker-centre layer. Copy `secrets.json.example` → `secrets.json` and fill in
 your credentials (or set `ONEMAP_EMAIL` / `ONEMAP_PASSWORD` env vars).
 Everything else works without it.
 
-**Phone access:** run `./phone.command` (macOS) to serve the app to your phone
-— on the same Wi-Fi via your LAN IP, or anywhere via a free Cloudflare quick
-tunnel.
+**Phone access (Android & iOS):** the app itself only needs to run on a
+computer — Windows or macOS both work. Your phone is just a browser client,
+so any Android or iOS device on the same Wi-Fi (or anywhere, via a tunnel)
+can use it, no app install needed. Double-click **`phone.command`** on macOS
+or **`phone.bat`** on Windows (or run `python phone.py` on Linux) to serve the
+app to your phone: on the same Wi-Fi via your LAN IP, or anywhere via a free
+Cloudflare quick tunnel if you have [`cloudflared`](https://github.com/cloudflare/cloudflared)
+installed. The UI itself is fully responsive — carousels, sort sheet, and
+listing cards all adapt to a phone screen.
 
 ## How it works
 
