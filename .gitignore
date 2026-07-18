@@ -28,3 +28,4 @@ __pycache__/
 .DS_Store
 .claude/
 p1_vacancies*.json
+sgschooling_cache.json

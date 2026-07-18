@@ -798,16 +798,29 @@ def p1_check(row_id):
         if blat and s.get("lat"):
             radial = int(_haversine_m(blat, blon, s["lat"], s["lon"]))
         judge = radial if radial is not None else s.get("distance_m")
+        # Multi-year Phase-2C ballot history (sgschooling.com, cached ~30 d).
+        def with_history(rec):
+            try:
+                import sgschooling
+                h = sgschooling.history(rec.get("name") or s.get("name"))
+                if h:
+                    rec["history"] = h["years"]
+                    rec["history_url"] = h["url"]
+            except Exception:
+                pass
+            return rec
+
         rec = p1data.summarise(p1data.lookup(s.get("name")))
         if not rec:
-            out.append({"name": s.get("name"), "distance_m": s.get("distance_m"),
-                        "radial_m": radial, "unmatched": True})
+            out.append(with_history(
+                {"name": s.get("name"), "distance_m": s.get("distance_m"),
+                 "radial_m": radial, "unmatched": True}))
             continue
         rec["distance_m"] = s.get("distance_m")
         rec["radial_m"] = radial
         rec["within_1km"] = (judge or 9999) <= 1000
         rec["within_2km"] = (judge or 9999) <= 2000
-        out.append(rec)
+        out.append(with_history(rec))
     return jsonify({"schools": out})
 
 

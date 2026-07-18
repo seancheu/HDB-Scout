@@ -487,6 +487,15 @@ body {
 .p1-detail { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
 .p1-moe { color: var(--brand); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .p1-moe:hover { text-decoration: underline; }
+/* Multi-year Phase-2C ballot history (sgschooling.com) */
+.p1-hist { margin-top: 4px; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+.p1-hist .h-ballot { color: #8a5a00; font-weight: 600; white-space: nowrap; cursor: help; }
+.p1-hist .h-clear { white-space: nowrap; cursor: help; }
+:root[data-theme="dark"] .p1-hist .h-ballot { color: #f0c070; }
+.p1-hist .warn-t { color: #8a5a00; }
+.p1-hist .good-t { color: #17703d; }
+:root[data-theme="dark"] .p1-hist .warn-t { color: #f0c070; }
+:root[data-theme="dark"] .p1-hist .good-t { color: #7fd6a0; }
 .p1-odds { margin-top: 4px; font-size: 12.5px; font-weight: 600; }
 .p1-odds.warn-t { color: #8a5a00; }
 .p1-odds.good-t { color: #17703d; }
