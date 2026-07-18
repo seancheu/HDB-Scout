@@ -94,9 +94,55 @@ def _open_in_browser(url):
     webbrowser.open(url)
 
 
+def _fetch(url, headers=None, timeout=6):
+    """(status, body) for a GET. Prefers `requests` (bundles its own CA
+    certs — python.org installs on macOS often ship without any, which
+    makes every stdlib HTTPS call fail); falls back to urllib without
+    verification, acceptable for a reachability probe."""
+    try:
+        import requests
+        r = requests.get(url, headers=headers or {}, timeout=timeout)
+        return r.status_code, r.text
+    except ImportError:
+        import ssl
+        import urllib.request
+        req = urllib.request.Request(url, headers=headers or {})
+        ctx = ssl._create_unverified_context()
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
+            return r.status, r.read().decode("utf-8", "replace")
+
+
+def _wait_until_live(url, timeout=45):
+    """Block until the tunnel URL actually serves the app from THIS machine.
+    cloudflared prints the URL before its DNS propagates and the tunnel
+    connects, so opening it immediately lands on a dead page."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            if _fetch(url)[0] == 200:
+                return True
+        except Exception:
+            pass          # DNS not propagated / edge not connected yet
+        time.sleep(2)
+    return False
+
+
+def _doh_resolves(host):
+    """Does the hostname exist globally (checked over DNS-over-HTTPS)?
+    Distinguishes 'tunnel not up yet' from 'my router/ISP DNS is broken'."""
+    import json
+    try:
+        status, body = _fetch(
+            f"https://cloudflare-dns.com/dns-query?name={host}&type=A",
+            headers={"Accept": "application/dns-json"}, timeout=8)
+        return status == 200 and bool(json.loads(body).get("Answer"))
+    except Exception:
+        return False
+
+
 def _watch_tunnel(proc):
-    """Echo cloudflared's output and open the public URL as soon as it
-    appears (each quick-tunnel gets a fresh https://….trycloudflare.com)."""
+    """Echo cloudflared's output; when the public URL appears, wait for it
+    to go live, then open it (each start gets a fresh trycloudflare URL)."""
     opened = False
     for line in proc.stdout:
         print(line, end="", flush=True)
@@ -105,9 +151,47 @@ def _watch_tunnel(proc):
             if m:
                 opened = True
                 url = m.group(0)
-                print(f"\n>>> Public link: {url}", flush=True)
-                print(">>> Opening it in Google Chrome…\n", flush=True)
-                _open_in_browser(url)
+                print(f"\n>>> Public link for your phone: {url}", flush=True)
+                print(">>> Checking the link is live (~15–30 s)…", flush=True)
+                def globally_up(host, timeout=60):
+                    deadline = time.time() + timeout
+                    while time.time() < deadline:
+                        if _doh_resolves(host):
+                            return True
+                        time.sleep(3)
+                    return False
+
+                if _wait_until_live(url):
+                    print(">>> Link is live — opening it in Google Chrome…\n",
+                          flush=True)
+                    _open_in_browser(url)
+                elif globally_up(url.split("//")[1]) and _wait_until_live(url, timeout=10):
+                    # Local DNS was just slow — it caught up.
+                    print(">>> Link is live — opening it in Google Chrome…\n",
+                          flush=True)
+                    _open_in_browser(url)
+                elif _doh_resolves(url.split("//")[1]):
+                    # The tunnel IS up worldwide — only this network's DNS
+                    # can't see fresh trycloudflare names.
+                    print(">>> The link is LIVE, but your router/ISP DNS "
+                          "can't resolve new trycloudflare.com names,",
+                          flush=True)
+                    print(">>> so it won't open on this computer. Your phone "
+                          "on MOBILE DATA will open it fine.", flush=True)
+                    print(">>> To open it on this computer too: Chrome → "
+                          "Settings → Privacy and security → Security →",
+                          flush=True)
+                    print(">>> turn on 'Use secure DNS' (Cloudflare 1.1.1.1), "
+                          "or set your Mac's DNS to 1.1.1.1.", flush=True)
+                    print(">>> Opening the app locally in Chrome instead…\n",
+                          flush=True)
+                    _open_in_browser(f"http://127.0.0.1:{PORT}")
+                else:
+                    print(">>> The tunnel didn't come up — opening the app "
+                          "locally in Chrome instead.", flush=True)
+                    print(">>> (Your phone can still use the same-Wi-Fi "
+                          "address printed above.)\n", flush=True)
+                    _open_in_browser(f"http://127.0.0.1:{PORT}")
 
 
 def main():
